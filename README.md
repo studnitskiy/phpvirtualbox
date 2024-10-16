@@ -1,5 +1,13 @@
 # About
 
+October 2024
+
+VirtualBox 7.1 support for x86 hosts only, no ARM hosts support.
+I've basically made it stop complaining and allow my existing environment to work.
+Minimally tested with PHP 8.2 (PHP-FPM + nginx).
+
+Original text follows
+
 This repository is a continuation of phpVirtualBox, which is no longer supported by the official authors (last commit on thier repository was sent on Jan 27, 2021 - written on Jan 18, 2023).
 
 Right now (from 2022), this software is updated by *[Bartek Sz.](https://github.com/BartekSz95)* and various contributors (see https://github.com/BartekSz95/phpvirtualbox/graphs/contributors).

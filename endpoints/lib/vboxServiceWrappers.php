@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright (C) 2008-2022 Oracle and/or its affiliates.
+ * Copyright (C) 2008-2024 Oracle and/or its affiliates.
  *
  * This file is part of a free software library; you can redistribute
  * it and/or modify it under the terms of the GNU Lesser General
@@ -47,7 +47,7 @@ class VBox_ManagedObject
         if (method_exists($this, $methodName))
             $this->$methodName($value);
         else
-            throw new Exception("Attribute does not exist");
+            throw new Exception("Attribute does not exist $attr");
     }
 
     public function __get($attr)
@@ -56,7 +56,7 @@ class VBox_ManagedObject
         if (method_exists($this, $methodName))
             return $this->$methodName();
         else
-            throw new Exception("Attribute does not exist");
+            throw new Exception("Attribute does not exist $attr");
     }
 
     public function getHandle()
@@ -148,7 +148,7 @@ abstract class VBox_Collection implements ArrayAccess, Iterator, Countable
     /** Iterator Functions **/
     public function rewind(): void
     {
-        reset($this->_objects);
+        $_ = reset($this->_objects);
     }
 
     public function current(): mixed
@@ -156,15 +156,15 @@ abstract class VBox_Collection implements ArrayAccess, Iterator, Countable
         return current($this->_objects);
     }
 
-    public function key(): mixed
+    public function key(): int|null|string
     {
         return key($this->_objects);
     }
 
-	#[ReturnTypeWillChange]
-    public function next()
+    //#[ReturnTypeWillChange]
+    public function next(): void
     {
-        return next($this->_objects);
+        $_ = next($this->_objects);
     }
 
     public function valid(): bool
@@ -250,38 +250,6 @@ abstract class VBox_EnumCollection extends VBox_Collection
  */
 class VirtualBox_COM_result_codes
 {
-
-    const VBOX_E_OBJECT_NOT_FOUND = 0x80BB0001;
-
-    const VBOX_E_INVALID_VM_STATE = 0x80BB0002;
-
-    const VBOX_E_VM_ERROR = 0x80BB0003;
-
-    const VBOX_E_FILE_ERROR = 0x80BB0004;
-
-    const VBOX_E_IPRT_ERROR = 0x80BB0005;
-
-    const VBOX_E_PDM_ERROR = 0x80BB0006;
-
-    const VBOX_E_INVALID_OBJECT_STATE = 0x80BB0007;
-
-    const VBOX_E_HOST_ERROR = 0x80BB0008;
-
-    const VBOX_E_NOT_SUPPORTED = 0x80BB0009;
-
-    const VBOX_E_XML_ERROR = 0x80BB000A;
-
-    const VBOX_E_INVALID_SESSION_STATE = 0x80BB000B;
-
-    const VBOX_E_OBJECT_IN_USE = 0x80BB000C;
-
-    const VBOX_E_PASSWORD_INCORRECT = 0x80BB000D;
-
-    const VBOX_E_MAXIMUM_REACHED = 0x80BB000E;
-
-    const VBOX_E_GSTCTL_GUEST_ERROR = 0x80BB000F;
-
-    const VBOX_E_TIMEOUT = 0x80BB0010;
 
 }
 
@@ -1542,12 +1510,22 @@ class IVirtualBox extends VBox_ManagedObject
         return (string)$response->returnval;
     }
 
-    public function createMachine($arg_settingsFile, $arg_name, $arg_groups, $arg_osTypeId, $arg_flags, $arg_cipher, $arg_passwordId, $arg_password)
+    public function getPlatformProperties($arg_architecture)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->architecture = $arg_architecture;
+        $response = $this->connection->__soapCall('IVirtualBox_getPlatformProperties', array((array)$request));
+        return new IPlatformProperties ($this->connection, $response->returnval);
+    }
+
+    public function createMachine($arg_settingsFile, $arg_name, $arg_platform, $arg_groups, $arg_osTypeId, $arg_flags, $arg_cipher, $arg_passwordId, $arg_password)
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         $request->settingsFile = $arg_settingsFile;
         $request->name = $arg_name;
+        $request->platform = $arg_platform;
         $request->groups = $arg_groups;
         $request->osTypeId = $arg_osTypeId;
         $request->flags = $arg_flags;
@@ -1651,6 +1629,24 @@ class IVirtualBox extends VBox_ManagedObject
         $request->id = $arg_id;
         $response = $this->connection->__soapCall('IVirtualBox_getGuestOSType', array((array)$request));
         return new IGuestOSType ($this->connection, $response->returnval);
+    }
+
+    public function getGuestOSSubtypesByFamilyId($arg_family)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->family = $arg_family;
+        $response = $this->connection->__soapCall('IVirtualBox_getGuestOSSubtypesByFamilyId', array((array)$request));
+        return (array)$response->returnval;
+    }
+
+    public function getGuestOSDescsBySubtype($arg_OSSubtype)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->OSSubtype = $arg_OSSubtype;
+        $response = $this->connection->__soapCall('IVirtualBox_getGuestOSDescsBySubtype', array((array)$request));
+        return (array)$response->returnval;
     }
 
     public function createSharedFolder($arg_name, $arg_hostPath, $arg_writable, $arg_automount, $arg_autoMountPoint)
@@ -1828,10 +1824,11 @@ class IVirtualBox extends VBox_ManagedObject
         return ;
     }
 
-    public function checkFirmwarePresent($arg_firmwareType, $arg_version)
+    public function checkFirmwarePresent($arg_platformArchitecture, $arg_firmwareType, $arg_version)
     {
         $request = new stdClass();
         $request->_this = $this->handle;
+        $request->platformArchitecture = $arg_platformArchitecture;
         $request->firmwareType = $arg_firmwareType;
         $request->version = $arg_version;
         $response = $this->connection->__soapCall('IVirtualBox_checkFirmwarePresent', array((array)$request));
@@ -1981,6 +1978,14 @@ class IVirtualBox extends VBox_ManagedObject
         $request->_this = $this->handle;
         $response = $this->connection->__soapCall('IVirtualBox_getGuestOSTypes', array((array)$request));
         return new IGuestOSTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getGuestOSFamilies()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IVirtualBox_getGuestOSFamilies', array((array)$request));
+        return (array)$response->returnval;
     }
 
     public function getSharedFolders()
@@ -2695,27 +2700,50 @@ class IUnattended extends VBox_ManagedObject
         $this->connection->__soapCall('IUnattended_setUser', array((array)$request));
     }
 
-    public function getPassword()
+    public function getUserPassword()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IUnattended_getPassword', array((array)$request));
+        $response = $this->connection->__soapCall('IUnattended_getUserPassword', array((array)$request));
         return (string)$response->returnval;
     }
 
-    public function setPassword($value)
+    public function setUserPassword($value)
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         if (is_null($value) || is_scalar($value))
         {
-            $request->password = $value;
+            $request->userPassword = $value;
         }
         else
         {
-            $request->password = $value->handle;
+            $request->userPassword = $value->handle;
         }
-        $this->connection->__soapCall('IUnattended_setPassword', array((array)$request));
+        $this->connection->__soapCall('IUnattended_setUserPassword', array((array)$request));
+    }
+
+    public function getAdminPassword()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IUnattended_getAdminPassword', array((array)$request));
+        return (string)$response->returnval;
+    }
+
+    public function setAdminPassword($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->adminPassword = $value;
+        }
+        else
+        {
+            $request->adminPassword = $value->handle;
+        }
+        $this->connection->__soapCall('IUnattended_setAdminPassword', array((array)$request));
     }
 
     public function getFullUserName()
@@ -2856,6 +2884,52 @@ class IUnattended extends VBox_ManagedObject
         $this->connection->__soapCall('IUnattended_setInstallTestExecService', array((array)$request));
     }
 
+    public function getUserPayloadIsoPath()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IUnattended_getUserPayloadIsoPath', array((array)$request));
+        return (string)$response->returnval;
+    }
+
+    public function setUserPayloadIsoPath($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->userPayloadIsoPath = $value;
+        }
+        else
+        {
+            $request->userPayloadIsoPath = $value->handle;
+        }
+        $this->connection->__soapCall('IUnattended_setUserPayloadIsoPath', array((array)$request));
+    }
+
+    public function getInstallUserPayload()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IUnattended_getInstallUserPayload', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
+    public function setInstallUserPayload($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->installUserPayload = $value;
+        }
+        else
+        {
+            $request->installUserPayload = $value->handle;
+        }
+        $this->connection->__soapCall('IUnattended_setInstallUserPayload', array((array)$request));
+    }
+
     public function getTimeZone()
     {
         $request = new stdClass();
@@ -2877,6 +2951,52 @@ class IUnattended extends VBox_ManagedObject
             $request->timeZone = $value->handle;
         }
         $this->connection->__soapCall('IUnattended_setTimeZone', array((array)$request));
+    }
+
+    public function getKeyboardLayout()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IUnattended_getKeyboardLayout', array((array)$request));
+        return (string)$response->returnval;
+    }
+
+    public function setKeyboardLayout($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->keyboardLayout = $value;
+        }
+        else
+        {
+            $request->keyboardLayout = $value->handle;
+        }
+        $this->connection->__soapCall('IUnattended_setKeyboardLayout', array((array)$request));
+    }
+
+    public function getKeyboardVariant()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IUnattended_getKeyboardVariant', array((array)$request));
+        return (string)$response->returnval;
+    }
+
+    public function setKeyboardVariant($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->keyboardVariant = $value;
+        }
+        else
+        {
+            $request->keyboardVariant = $value->handle;
+        }
+        $this->connection->__soapCall('IUnattended_setKeyboardVariant', array((array)$request));
     }
 
     public function getLocale()
@@ -3257,6 +3377,25 @@ class IUnattendedCollection extends VBox_ManagedObjectCollection
 class IGraphicsAdapter extends VBox_ManagedObject
 {
 
+    public function setFeature($arg_feature, $arg_enabled)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->feature = $arg_feature;
+        $request->enabled = $arg_enabled;
+        $response = $this->connection->__soapCall('IGraphicsAdapter_setFeature', array((array)$request));
+        return ;
+    }
+
+    public function isFeatureEnabled($arg_feature)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->feature = $arg_feature;
+        $response = $this->connection->__soapCall('IGraphicsAdapter_isFeatureEnabled', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
     public function getGraphicsControllerType()
     {
         $request = new stdClass();
@@ -3303,52 +3442,6 @@ class IGraphicsAdapter extends VBox_ManagedObject
         $this->connection->__soapCall('IGraphicsAdapter_setVRAMSize', array((array)$request));
     }
 
-    public function getAccelerate3DEnabled()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IGraphicsAdapter_getAccelerate3DEnabled', array((array)$request));
-        return (bool)$response->returnval;
-    }
-
-    public function setAccelerate3DEnabled($value)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        if (is_null($value) || is_scalar($value))
-        {
-            $request->accelerate3DEnabled = $value;
-        }
-        else
-        {
-            $request->accelerate3DEnabled = $value->handle;
-        }
-        $this->connection->__soapCall('IGraphicsAdapter_setAccelerate3DEnabled', array((array)$request));
-    }
-
-    public function getAccelerate2DVideoEnabled()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IGraphicsAdapter_getAccelerate2DVideoEnabled', array((array)$request));
-        return (bool)$response->returnval;
-    }
-
-    public function setAccelerate2DVideoEnabled($value)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        if (is_null($value) || is_scalar($value))
-        {
-            $request->accelerate2DVideoEnabled = $value;
-        }
-        else
-        {
-            $request->accelerate2DVideoEnabled = $value->handle;
-        }
-        $this->connection->__soapCall('IGraphicsAdapter_setAccelerate2DVideoEnabled', array((array)$request));
-    }
-
     public function getMonitorCount()
     {
         $request = new stdClass();
@@ -3384,14 +3477,37 @@ class IGraphicsAdapterCollection extends VBox_ManagedObjectCollection
 /**
  * Generated VBoxWebService Interface Wrapper
  */
-class IBIOSSettings extends VBox_ManagedObject
+class IFirmwareSettings extends VBox_ManagedObject
 {
+
+    public function getFirmwareType()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IFirmwareSettings_getFirmwareType', array((array)$request));
+        return new FirmwareType ($this->connection, $response->returnval);
+    }
+
+    public function setFirmwareType($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->firmwareType = $value;
+        }
+        else
+        {
+            $request->firmwareType = $value->handle;
+        }
+        $this->connection->__soapCall('IFirmwareSettings_setFirmwareType', array((array)$request));
+    }
 
     public function getLogoFadeIn()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getLogoFadeIn', array((array)$request));
+        $response = $this->connection->__soapCall('IFirmwareSettings_getLogoFadeIn', array((array)$request));
         return (bool)$response->returnval;
     }
 
@@ -3407,14 +3523,14 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->logoFadeIn = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setLogoFadeIn', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setLogoFadeIn', array((array)$request));
     }
 
     public function getLogoFadeOut()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getLogoFadeOut', array((array)$request));
+        $response = $this->connection->__soapCall('IFirmwareSettings_getLogoFadeOut', array((array)$request));
         return (bool)$response->returnval;
     }
 
@@ -3430,14 +3546,14 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->logoFadeOut = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setLogoFadeOut', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setLogoFadeOut', array((array)$request));
     }
 
     public function getLogoDisplayTime()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getLogoDisplayTime', array((array)$request));
+        $response = $this->connection->__soapCall('IFirmwareSettings_getLogoDisplayTime', array((array)$request));
         return (float)$response->returnval;
     }
 
@@ -3453,14 +3569,14 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->logoDisplayTime = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setLogoDisplayTime', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setLogoDisplayTime', array((array)$request));
     }
 
     public function getLogoImagePath()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getLogoImagePath', array((array)$request));
+        $response = $this->connection->__soapCall('IFirmwareSettings_getLogoImagePath', array((array)$request));
         return (string)$response->returnval;
     }
 
@@ -3476,15 +3592,15 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->logoImagePath = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setLogoImagePath', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setLogoImagePath', array((array)$request));
     }
 
     public function getBootMenuMode()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getBootMenuMode', array((array)$request));
-        return new BIOSBootMenuMode ($this->connection, $response->returnval);
+        $response = $this->connection->__soapCall('IFirmwareSettings_getBootMenuMode', array((array)$request));
+        return new FirmwareBootMenuMode ($this->connection, $response->returnval);
     }
 
     public function setBootMenuMode($value)
@@ -3499,14 +3615,14 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->bootMenuMode = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setBootMenuMode', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setBootMenuMode', array((array)$request));
     }
 
     public function getACPIEnabled()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getACPIEnabled', array((array)$request));
+        $response = $this->connection->__soapCall('IFirmwareSettings_getACPIEnabled', array((array)$request));
         return (bool)$response->returnval;
     }
 
@@ -3522,14 +3638,14 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->ACPIEnabled = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setACPIEnabled', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setACPIEnabled', array((array)$request));
     }
 
     public function getIOAPICEnabled()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getIOAPICEnabled', array((array)$request));
+        $response = $this->connection->__soapCall('IFirmwareSettings_getIOAPICEnabled', array((array)$request));
         return (bool)$response->returnval;
     }
 
@@ -3545,14 +3661,14 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->IOAPICEnabled = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setIOAPICEnabled', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setIOAPICEnabled', array((array)$request));
     }
 
     public function getAPICMode()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getAPICMode', array((array)$request));
+        $response = $this->connection->__soapCall('IFirmwareSettings_getAPICMode', array((array)$request));
         return new APICMode ($this->connection, $response->returnval);
     }
 
@@ -3568,14 +3684,14 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->APICMode = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setAPICMode', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setAPICMode', array((array)$request));
     }
 
     public function getTimeOffset()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getTimeOffset', array((array)$request));
+        $response = $this->connection->__soapCall('IFirmwareSettings_getTimeOffset', array((array)$request));
         return (float)$response->returnval;
     }
 
@@ -3591,14 +3707,14 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->timeOffset = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setTimeOffset', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setTimeOffset', array((array)$request));
     }
 
     public function getPXEDebugEnabled()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getPXEDebugEnabled', array((array)$request));
+        $response = $this->connection->__soapCall('IFirmwareSettings_getPXEDebugEnabled', array((array)$request));
         return (bool)$response->returnval;
     }
 
@@ -3614,14 +3730,14 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->PXEDebugEnabled = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setPXEDebugEnabled', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setPXEDebugEnabled', array((array)$request));
     }
 
     public function getSMBIOSUuidLittleEndian()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IBIOSSettings_getSMBIOSUuidLittleEndian', array((array)$request));
+        $response = $this->connection->__soapCall('IFirmwareSettings_getSMBIOSUuidLittleEndian', array((array)$request));
         return (bool)$response->returnval;
     }
 
@@ -3637,16 +3753,39 @@ class IBIOSSettings extends VBox_ManagedObject
         {
             $request->SMBIOSUuidLittleEndian = $value->handle;
         }
-        $this->connection->__soapCall('IBIOSSettings_setSMBIOSUuidLittleEndian', array((array)$request));
+        $this->connection->__soapCall('IFirmwareSettings_setSMBIOSUuidLittleEndian', array((array)$request));
+    }
+
+    public function getAutoSerialNumGen()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IFirmwareSettings_getAutoSerialNumGen', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
+    public function setAutoSerialNumGen($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->AutoSerialNumGen = $value;
+        }
+        else
+        {
+            $request->AutoSerialNumGen = $value->handle;
+        }
+        $this->connection->__soapCall('IFirmwareSettings_setAutoSerialNumGen', array((array)$request));
     }
 }
 
 /**
  * Generated VBoxWebService Managed Object Collection
  */
-class IBIOSSettingsCollection extends VBox_ManagedObjectCollection
+class IFirmwareSettingsCollection extends VBox_ManagedObjectCollection
 {
-    protected $_interfaceName = "IBIOSSettings";
+    protected $_interfaceName = "IFirmwareSettings";
 }
 
 /**
@@ -4240,6 +4379,14 @@ class IRecordingSettings extends VBox_ManagedObject
         return new IRecordingScreenSettings ($this->connection, $response->returnval);
     }
 
+    public function start()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IRecordingSettings_start', array((array)$request));
+        return new IProgress ($this->connection, $response->returnval);
+    }
+
     public function getEnabled()
     {
         $request = new stdClass();
@@ -4269,6 +4416,14 @@ class IRecordingSettings extends VBox_ManagedObject
         $request->_this = $this->handle;
         $response = $this->connection->__soapCall('IRecordingSettings_getScreens', array((array)$request));
         return new IRecordingScreenSettingsCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getProgress()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IRecordingSettings_getProgress', array((array)$request));
+        return new IProgress ($this->connection, $response->returnval);
     }
 }
 
@@ -4495,6 +4650,17 @@ class IUefiVariableStore extends VBox_ManagedObject
         return ;
     }
 
+    public function addSignatureToMok($arg_signature, $arg_owner, $arg_signatureType)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->signature = $arg_signature;
+        $request->owner = $arg_owner;
+        $request->signatureType = $arg_signatureType;
+        $response = $this->connection->__soapCall('IUefiVariableStore_addSignatureToMok', array((array)$request));
+        return ;
+    }
+
     public function getSecureBootEnabled()
     {
         $request = new stdClass();
@@ -4581,6 +4747,310 @@ class INvramStore extends VBox_ManagedObject
 class INvramStoreCollection extends VBox_ManagedObjectCollection
 {
     protected $_interfaceName = "INvramStore";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class IResourceStore extends VBox_ManagedObject
+{
+
+    public function getMidlDoesNotLikeEmptyInterfaces()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IResourceStore_getMidlDoesNotLikeEmptyInterfaces', array((array)$request));
+        return (bool)$response->returnval;
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IResourceStoreCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IResourceStore";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class IPlatform extends VBox_ManagedObject
+{
+
+    public function getArchitecture()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatform_getArchitecture', array((array)$request));
+        return new PlatformArchitecture ($this->connection, $response->returnval);
+    }
+
+    public function setArchitecture($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->architecture = $value;
+        }
+        else
+        {
+            $request->architecture = $value->handle;
+        }
+        $this->connection->__soapCall('IPlatform_setArchitecture', array((array)$request));
+    }
+
+    public function getProperties()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatform_getProperties', array((array)$request));
+        return new IPlatformProperties ($this->connection, $response->returnval);
+    }
+
+    public function getX86()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatform_getX86', array((array)$request));
+        return new IPlatformX86 ($this->connection, $response->returnval);
+    }
+
+    public function getARM()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatform_getARM', array((array)$request));
+        return new IPlatformARM ($this->connection, $response->returnval);
+    }
+
+    public function getChipsetType()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatform_getChipsetType', array((array)$request));
+        return new ChipsetType ($this->connection, $response->returnval);
+    }
+
+    public function setChipsetType($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->chipsetType = $value;
+        }
+        else
+        {
+            $request->chipsetType = $value->handle;
+        }
+        $this->connection->__soapCall('IPlatform_setChipsetType', array((array)$request));
+    }
+
+    public function getIommuType()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatform_getIommuType', array((array)$request));
+        return new IommuType ($this->connection, $response->returnval);
+    }
+
+    public function setIommuType($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->iommuType = $value;
+        }
+        else
+        {
+            $request->iommuType = $value->handle;
+        }
+        $this->connection->__soapCall('IPlatform_setIommuType', array((array)$request));
+    }
+
+    public function getRTCUseUTC()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatform_getRTCUseUTC', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
+    public function setRTCUseUTC($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->RTCUseUTC = $value;
+        }
+        else
+        {
+            $request->RTCUseUTC = $value->handle;
+        }
+        $this->connection->__soapCall('IPlatform_setRTCUseUTC', array((array)$request));
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IPlatformCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IPlatform";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class IPlatformX86 extends VBox_ManagedObject
+{
+
+    public function getCPUProperty($arg_property)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->property = $arg_property;
+        $response = $this->connection->__soapCall('IPlatformX86_getCPUProperty', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
+    public function setCPUProperty($arg_property, $arg_value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->property = $arg_property;
+        $request->value = $arg_value;
+        $response = $this->connection->__soapCall('IPlatformX86_setCPUProperty', array((array)$request));
+        return ;
+    }
+
+    public function getCPUIDLeafByOrdinal($arg_ordinal)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->ordinal = $arg_ordinal;
+        $response = $this->connection->__soapCall('IPlatformX86_getCPUIDLeafByOrdinal', array((array)$request));
+        return array((float)$response->idx, (float)$response->idxSub, (float)$response->valEax, (float)$response->valEbx, (float)$response->valEcx, (float)$response->valEdx);
+    }
+
+    public function getCPUIDLeaf($arg_idx, $arg_idxSub)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->idx = $arg_idx;
+        $request->idxSub = $arg_idxSub;
+        $response = $this->connection->__soapCall('IPlatformX86_getCPUIDLeaf', array((array)$request));
+        return array((float)$response->valEax, (float)$response->valEbx, (float)$response->valEcx, (float)$response->valEdx);
+    }
+
+    public function setCPUIDLeaf($arg_idx, $arg_idxSub, $arg_valEax, $arg_valEbx, $arg_valEcx, $arg_valEdx)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->idx = $arg_idx;
+        $request->idxSub = $arg_idxSub;
+        $request->valEax = $arg_valEax;
+        $request->valEbx = $arg_valEbx;
+        $request->valEcx = $arg_valEcx;
+        $request->valEdx = $arg_valEdx;
+        $response = $this->connection->__soapCall('IPlatformX86_setCPUIDLeaf', array((array)$request));
+        return ;
+    }
+
+    public function removeCPUIDLeaf($arg_idx, $arg_idxSub)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->idx = $arg_idx;
+        $request->idxSub = $arg_idxSub;
+        $response = $this->connection->__soapCall('IPlatformX86_removeCPUIDLeaf', array((array)$request));
+        return ;
+    }
+
+    public function removeAllCPUIDLeaves()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformX86_removeAllCPUIDLeaves', array((array)$request));
+        return ;
+    }
+
+    public function getHWVirtExProperty($arg_property)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->property = $arg_property;
+        $response = $this->connection->__soapCall('IPlatformX86_getHWVirtExProperty', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
+    public function setHWVirtExProperty($arg_property, $arg_value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->property = $arg_property;
+        $request->value = $arg_value;
+        $response = $this->connection->__soapCall('IPlatformX86_setHWVirtExProperty', array((array)$request));
+        return ;
+    }
+
+    public function getHPETEnabled()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformX86_getHPETEnabled', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
+    public function setHPETEnabled($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->HPETEnabled = $value;
+        }
+        else
+        {
+            $request->HPETEnabled = $value->handle;
+        }
+        $this->connection->__soapCall('IPlatformX86_setHPETEnabled', array((array)$request));
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IPlatformX86Collection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IPlatformX86";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class IPlatformARM extends VBox_ManagedObject
+{
+
+    public function getMidlDoesNotLikeEmptyInterfaces()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformARM_getMidlDoesNotLikeEmptyInterfaces', array((array)$request));
+        return (bool)$response->returnval;
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IPlatformARMCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IPlatformARM";
 }
 
 /**
@@ -4960,95 +5430,6 @@ class IMachine extends VBox_ManagedObject
         $request->key = $arg_key;
         $request->value = $arg_value;
         $response = $this->connection->__soapCall('IMachine_setExtraData', array((array)$request));
-        return ;
-    }
-
-    public function getCPUProperty($arg_property)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->property = $arg_property;
-        $response = $this->connection->__soapCall('IMachine_getCPUProperty', array((array)$request));
-        return (bool)$response->returnval;
-    }
-
-    public function setCPUProperty($arg_property, $arg_value)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->property = $arg_property;
-        $request->value = $arg_value;
-        $response = $this->connection->__soapCall('IMachine_setCPUProperty', array((array)$request));
-        return ;
-    }
-
-    public function getCPUIDLeafByOrdinal($arg_ordinal)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->ordinal = $arg_ordinal;
-        $response = $this->connection->__soapCall('IMachine_getCPUIDLeafByOrdinal', array((array)$request));
-        return array((float)$response->idx, (float)$response->idxSub, (float)$response->valEax, (float)$response->valEbx, (float)$response->valEcx, (float)$response->valEdx);
-    }
-
-    public function getCPUIDLeaf($arg_idx, $arg_idxSub)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->idx = $arg_idx;
-        $request->idxSub = $arg_idxSub;
-        $response = $this->connection->__soapCall('IMachine_getCPUIDLeaf', array((array)$request));
-        return array((float)$response->valEax, (float)$response->valEbx, (float)$response->valEcx, (float)$response->valEdx);
-    }
-
-    public function setCPUIDLeaf($arg_idx, $arg_idxSub, $arg_valEax, $arg_valEbx, $arg_valEcx, $arg_valEdx)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->idx = $arg_idx;
-        $request->idxSub = $arg_idxSub;
-        $request->valEax = $arg_valEax;
-        $request->valEbx = $arg_valEbx;
-        $request->valEcx = $arg_valEcx;
-        $request->valEdx = $arg_valEdx;
-        $response = $this->connection->__soapCall('IMachine_setCPUIDLeaf', array((array)$request));
-        return ;
-    }
-
-    public function removeCPUIDLeaf($arg_idx, $arg_idxSub)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->idx = $arg_idx;
-        $request->idxSub = $arg_idxSub;
-        $response = $this->connection->__soapCall('IMachine_removeCPUIDLeaf', array((array)$request));
-        return ;
-    }
-
-    public function removeAllCPUIDLeaves()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IMachine_removeAllCPUIDLeaves', array((array)$request));
-        return ;
-    }
-
-    public function getHWVirtExProperty($arg_property)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->property = $arg_property;
-        $response = $this->connection->__soapCall('IMachine_getHWVirtExProperty', array((array)$request));
-        return (bool)$response->returnval;
-    }
-
-    public function setHWVirtExProperty($arg_property, $arg_value)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->property = $arg_property;
-        $request->value = $arg_value;
-        $response = $this->connection->__soapCall('IMachine_setHWVirtExProperty', array((array)$request));
         return ;
     }
 
@@ -5844,12 +6225,20 @@ class IMachine extends VBox_ManagedObject
         return new IGraphicsAdapter ($this->connection, $response->returnval);
     }
 
-    public function getBIOSSettings()
+    public function getPlatform()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IMachine_getBIOSSettings', array((array)$request));
-        return new IBIOSSettings ($this->connection, $response->returnval);
+        $response = $this->connection->__soapCall('IMachine_getPlatform', array((array)$request));
+        return new IPlatform ($this->connection, $response->returnval);
+    }
+
+    public function getFirmwareSettings()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IMachine_getFirmwareSettings', array((array)$request));
+        return new IFirmwareSettings ($this->connection, $response->returnval);
     }
 
     public function getTrustedPlatformModule()
@@ -5874,29 +6263,6 @@ class IMachine extends VBox_ManagedObject
         $request->_this = $this->handle;
         $response = $this->connection->__soapCall('IMachine_getRecordingSettings', array((array)$request));
         return new IRecordingSettings ($this->connection, $response->returnval);
-    }
-
-    public function getFirmwareType()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IMachine_getFirmwareType', array((array)$request));
-        return new FirmwareType ($this->connection, $response->returnval);
-    }
-
-    public function setFirmwareType($value)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        if (is_null($value) || is_scalar($value))
-        {
-            $request->firmwareType = $value;
-        }
-        else
-        {
-            $request->firmwareType = $value->handle;
-        }
-        $this->connection->__soapCall('IMachine_setFirmwareType', array((array)$request));
     }
 
     public function getPointingHIDType()
@@ -5943,75 +6309,6 @@ class IMachine extends VBox_ManagedObject
             $request->keyboardHIDType = $value->handle;
         }
         $this->connection->__soapCall('IMachine_setKeyboardHIDType', array((array)$request));
-    }
-
-    public function getHPETEnabled()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IMachine_getHPETEnabled', array((array)$request));
-        return (bool)$response->returnval;
-    }
-
-    public function setHPETEnabled($value)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        if (is_null($value) || is_scalar($value))
-        {
-            $request->HPETEnabled = $value;
-        }
-        else
-        {
-            $request->HPETEnabled = $value->handle;
-        }
-        $this->connection->__soapCall('IMachine_setHPETEnabled', array((array)$request));
-    }
-
-    public function getChipsetType()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IMachine_getChipsetType', array((array)$request));
-        return new ChipsetType ($this->connection, $response->returnval);
-    }
-
-    public function setChipsetType($value)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        if (is_null($value) || is_scalar($value))
-        {
-            $request->chipsetType = $value;
-        }
-        else
-        {
-            $request->chipsetType = $value->handle;
-        }
-        $this->connection->__soapCall('IMachine_setChipsetType', array((array)$request));
-    }
-
-    public function getIommuType()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IMachine_getIommuType', array((array)$request));
-        return new IommuType ($this->connection, $response->returnval);
-    }
-
-    public function setIommuType($value)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        if (is_null($value) || is_scalar($value))
-        {
-            $request->iommuType = $value;
-        }
-        else
-        {
-            $request->iommuType = $value->handle;
-        }
-        $this->connection->__soapCall('IMachine_setIommuType', array((array)$request));
     }
 
     public function getSnapshotFolder()
@@ -6404,29 +6701,6 @@ class IMachine extends VBox_ManagedObject
         $this->connection->__soapCall('IMachine_setParavirtProvider', array((array)$request));
     }
 
-    public function getRTCUseUTC()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IMachine_getRTCUseUTC', array((array)$request));
-        return (bool)$response->returnval;
-    }
-
-    public function setRTCUseUTC($value)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        if (is_null($value) || is_scalar($value))
-        {
-            $request->RTCUseUTC = $value;
-        }
-        else
-        {
-            $request->RTCUseUTC = $value->handle;
-        }
-        $this->connection->__soapCall('IMachine_setRTCUseUTC', array((array)$request));
-    }
-
     public function getIOCacheEnabled()
     {
         $request = new stdClass();
@@ -6679,6 +6953,29 @@ class IMachine extends VBox_ManagedObject
             $request->VMProcessPriority = $value->handle;
         }
         $this->connection->__soapCall('IMachine_setVMProcessPriority', array((array)$request));
+    }
+
+    public function getVMExecutionEngine()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IMachine_getVMExecutionEngine', array((array)$request));
+        return new VMExecutionEngine ($this->connection, $response->returnval);
+    }
+
+    public function setVMExecutionEngine($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->VMExecutionEngine = $value;
+        }
+        else
+        {
+            $request->VMExecutionEngine = $value->handle;
+        }
+        $this->connection->__soapCall('IMachine_setVMExecutionEngine', array((array)$request));
     }
 
     public function getParavirtDebug()
@@ -7725,6 +8022,32 @@ class IHostDriveCollection extends VBox_ManagedObjectCollection
 /**
  * Generated VBoxWebService Interface Wrapper
  */
+class IHostX86 extends VBox_ManagedObject
+{
+
+    public function getProcessorCPUIDLeaf($arg_cpuId, $arg_leaf, $arg_subLeaf)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->cpuId = $arg_cpuId;
+        $request->leaf = $arg_leaf;
+        $request->subLeaf = $arg_subLeaf;
+        $response = $this->connection->__soapCall('IHostX86_getProcessorCPUIDLeaf', array((array)$request));
+        return array((float)$response->valEax, (float)$response->valEbx, (float)$response->valEcx, (float)$response->valEdx);
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IHostX86Collection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IHostX86";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
 class IHost extends VBox_ManagedObject
 {
 
@@ -7753,17 +8076,6 @@ class IHost extends VBox_ManagedObject
         $request->cpuId = $arg_cpuId;
         $response = $this->connection->__soapCall('IHost_getProcessorDescription', array((array)$request));
         return (string)$response->returnval;
-    }
-
-    public function getProcessorCPUIDLeaf($arg_cpuId, $arg_leaf, $arg_subLeaf)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->cpuId = $arg_cpuId;
-        $request->leaf = $arg_leaf;
-        $request->subLeaf = $arg_subLeaf;
-        $response = $this->connection->__soapCall('IHost_getProcessorCPUIDLeaf', array((array)$request));
-        return array((float)$response->valEax, (float)$response->valEbx, (float)$response->valEcx, (float)$response->valEdx);
     }
 
     public function createHostOnlyNetworkInterface()
@@ -7902,6 +8214,32 @@ class IHost extends VBox_ManagedObject
         $request->id = $arg_id;
         $response = $this->connection->__soapCall('IHost_removeUSBDeviceSource', array((array)$request));
         return ;
+    }
+
+    public function isExecutionEngineSupported($arg_cpuArchitecture, $arg_executionEngine)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->cpuArchitecture = $arg_cpuArchitecture;
+        $request->executionEngine = $arg_executionEngine;
+        $response = $this->connection->__soapCall('IHost_isExecutionEngineSupported', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
+    public function getArchitecture()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IHost_getArchitecture', array((array)$request));
+        return new PlatformArchitecture ($this->connection, $response->returnval);
+    }
+
+    public function getX86()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IHost_getX86', array((array)$request));
+        return new IHostX86 ($this->connection, $response->returnval);
     }
 
     public function getDVDDrives()
@@ -8056,14 +8394,6 @@ class IHost extends VBox_ManagedObject
         return (float)$response->returnval;
     }
 
-    public function getAcceleration3DAvailable()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IHost_getAcceleration3DAvailable', array((array)$request));
-        return (bool)$response->returnval;
-    }
-
     public function getVideoInputDevices()
     {
         $request = new stdClass();
@@ -8147,7 +8477,7 @@ class ICPUProfileCollection extends VBox_ManagedObjectCollection
 /**
  * Generated VBoxWebService Interface Wrapper
  */
-class ISystemProperties extends VBox_ManagedObject
+class IPlatformProperties extends VBox_ManagedObject
 {
 
     public function getMaxNetworkAdapters($arg_chipset)
@@ -8155,7 +8485,7 @@ class ISystemProperties extends VBox_ManagedObject
         $request = new stdClass();
         $request->_this = $this->handle;
         $request->chipset = $arg_chipset;
-        $response = $this->connection->__soapCall('ISystemProperties_getMaxNetworkAdapters', array((array)$request));
+        $response = $this->connection->__soapCall('IPlatformProperties_getMaxNetworkAdapters', array((array)$request));
         return (float)$response->returnval;
     }
 
@@ -8165,7 +8495,7 @@ class ISystemProperties extends VBox_ManagedObject
         $request->_this = $this->handle;
         $request->chipset = $arg_chipset;
         $request->type = $arg_type;
-        $response = $this->connection->__soapCall('ISystemProperties_getMaxNetworkAdaptersOfType', array((array)$request));
+        $response = $this->connection->__soapCall('IPlatformProperties_getMaxNetworkAdaptersOfType', array((array)$request));
         return (float)$response->returnval;
     }
 
@@ -8174,7 +8504,7 @@ class ISystemProperties extends VBox_ManagedObject
         $request = new stdClass();
         $request->_this = $this->handle;
         $request->bus = $arg_bus;
-        $response = $this->connection->__soapCall('ISystemProperties_getMaxDevicesPerPortForStorageBus', array((array)$request));
+        $response = $this->connection->__soapCall('IPlatformProperties_getMaxDevicesPerPortForStorageBus', array((array)$request));
         return (float)$response->returnval;
     }
 
@@ -8183,7 +8513,7 @@ class ISystemProperties extends VBox_ManagedObject
         $request = new stdClass();
         $request->_this = $this->handle;
         $request->bus = $arg_bus;
-        $response = $this->connection->__soapCall('ISystemProperties_getMinPortCountForStorageBus', array((array)$request));
+        $response = $this->connection->__soapCall('IPlatformProperties_getMinPortCountForStorageBus', array((array)$request));
         return (float)$response->returnval;
     }
 
@@ -8192,7 +8522,7 @@ class ISystemProperties extends VBox_ManagedObject
         $request = new stdClass();
         $request->_this = $this->handle;
         $request->bus = $arg_bus;
-        $response = $this->connection->__soapCall('ISystemProperties_getMaxPortCountForStorageBus', array((array)$request));
+        $response = $this->connection->__soapCall('IPlatformProperties_getMaxPortCountForStorageBus', array((array)$request));
         return (float)$response->returnval;
     }
 
@@ -8202,8 +8532,27 @@ class ISystemProperties extends VBox_ManagedObject
         $request->_this = $this->handle;
         $request->chipset = $arg_chipset;
         $request->bus = $arg_bus;
-        $response = $this->connection->__soapCall('ISystemProperties_getMaxInstancesOfStorageBus', array((array)$request));
+        $response = $this->connection->__soapCall('IPlatformProperties_getMaxInstancesOfStorageBus', array((array)$request));
         return (float)$response->returnval;
+    }
+
+    public function getSupportedVRAMRange($arg_graphicsControllerType, $arg_accelerate3DEnabled)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->graphicsControllerType = $arg_graphicsControllerType;
+        $request->accelerate3DEnabled = $arg_accelerate3DEnabled;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedVRAMRange', array((array)$request));
+        return array((float)$response->returnval, (float)$response->minMB, (float)$response->maxMB);
+    }
+
+    public function getSupportedGfxFeaturesForType($arg_graphicsControllerType)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->graphicsControllerType = $arg_graphicsControllerType;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedGfxFeaturesForType', array((array)$request));
+        return new GraphicsFeatureCollection ($this->connection, (array)$response->returnval);
     }
 
     public function getDeviceTypesForStorageBus($arg_bus)
@@ -8211,27 +8560,236 @@ class ISystemProperties extends VBox_ManagedObject
         $request = new stdClass();
         $request->_this = $this->handle;
         $request->bus = $arg_bus;
-        $response = $this->connection->__soapCall('ISystemProperties_getDeviceTypesForStorageBus', array((array)$request));
+        $response = $this->connection->__soapCall('IPlatformProperties_getDeviceTypesForStorageBus', array((array)$request));
         return new DeviceTypeCollection ($this->connection, (array)$response->returnval);
     }
 
-    public function getStorageBusForStorageControllerType($arg_storageControllerType)
+    public function getStorageBusForControllerType($arg_storageControllerType)
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         $request->storageControllerType = $arg_storageControllerType;
-        $response = $this->connection->__soapCall('ISystemProperties_getStorageBusForStorageControllerType', array((array)$request));
+        $response = $this->connection->__soapCall('IPlatformProperties_getStorageBusForControllerType', array((array)$request));
         return new StorageBus ($this->connection, $response->returnval);
     }
 
-    public function getStorageControllerTypesForStorageBus($arg_storageBus)
+    public function getStorageControllerTypesForBus($arg_storageBus)
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         $request->storageBus = $arg_storageBus;
-        $response = $this->connection->__soapCall('ISystemProperties_getStorageControllerTypesForStorageBus', array((array)$request));
+        $response = $this->connection->__soapCall('IPlatformProperties_getStorageControllerTypesForBus', array((array)$request));
         return new StorageControllerTypeCollection ($this->connection, (array)$response->returnval);
     }
+
+    public function getStorageControllerHotplugCapable($arg_controllerType)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->controllerType = $arg_controllerType;
+        $response = $this->connection->__soapCall('IPlatformProperties_getStorageControllerHotplugCapable', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
+    public function getMaxInstancesOfUSBControllerType($arg_chipset, $arg_type)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->chipset = $arg_chipset;
+        $request->type = $arg_type;
+        $response = $this->connection->__soapCall('IPlatformProperties_getMaxInstancesOfUSBControllerType', array((array)$request));
+        return (float)$response->returnval;
+    }
+
+    public function getRawModeSupported()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getRawModeSupported', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
+    public function getExclusiveHwVirt()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getExclusiveHwVirt', array((array)$request));
+        return (bool)$response->returnval;
+    }
+
+    public function setExclusiveHwVirt($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->exclusiveHwVirt = $value;
+        }
+        else
+        {
+            $request->exclusiveHwVirt = $value->handle;
+        }
+        $this->connection->__soapCall('IPlatformProperties_setExclusiveHwVirt', array((array)$request));
+    }
+
+    public function getSerialPortCount()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSerialPortCount', array((array)$request));
+        return (float)$response->returnval;
+    }
+
+    public function getParallelPortCount()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getParallelPortCount', array((array)$request));
+        return (float)$response->returnval;
+    }
+
+    public function getMaxBootPosition()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getMaxBootPosition', array((array)$request));
+        return (float)$response->returnval;
+    }
+
+    public function getSupportedParavirtProviders()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedParavirtProviders', array((array)$request));
+        return new ParavirtProviderCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedFirmwareTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedFirmwareTypes', array((array)$request));
+        return new FirmwareTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedGuestOSTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedGuestOSTypes', array((array)$request));
+        return new IGuestOSTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedGfxControllerTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedGfxControllerTypes', array((array)$request));
+        return new GraphicsControllerTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedNetAdpPromiscModePols()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedNetAdpPromiscModePols', array((array)$request));
+        return new NetworkAdapterPromiscModePolicyCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedNetworkAdapterTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedNetworkAdapterTypes', array((array)$request));
+        return new NetworkAdapterTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedUartTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedUartTypes', array((array)$request));
+        return new UartTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedUSBControllerTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedUSBControllerTypes', array((array)$request));
+        return new USBControllerTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedAudioControllerTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedAudioControllerTypes', array((array)$request));
+        return new AudioControllerTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedBootDevices()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedBootDevices', array((array)$request));
+        return new DeviceTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedStorageBuses()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedStorageBuses', array((array)$request));
+        return new StorageBusCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedStorageControllerTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedStorageControllerTypes', array((array)$request));
+        return new StorageControllerTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedChipsetTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedChipsetTypes', array((array)$request));
+        return new ChipsetTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedIommuTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedIommuTypes', array((array)$request));
+        return new IommuTypeCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedTpmTypes()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IPlatformProperties_getSupportedTpmTypes', array((array)$request));
+        return new TpmTypeCollection ($this->connection, (array)$response->returnval);
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IPlatformPropertiesCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IPlatformProperties";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class ISystemProperties extends VBox_ManagedObject
+{
 
     public function getDefaultIoCacheSettingForStorageController($arg_controllerType)
     {
@@ -8242,25 +8800,6 @@ class ISystemProperties extends VBox_ManagedObject
         return (bool)$response->returnval;
     }
 
-    public function getStorageControllerHotplugCapable($arg_controllerType)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->controllerType = $arg_controllerType;
-        $response = $this->connection->__soapCall('ISystemProperties_getStorageControllerHotplugCapable', array((array)$request));
-        return (bool)$response->returnval;
-    }
-
-    public function getMaxInstancesOfUSBControllerType($arg_chipset, $arg_type)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $request->chipset = $arg_chipset;
-        $request->type = $arg_type;
-        $response = $this->connection->__soapCall('ISystemProperties_getMaxInstancesOfUSBControllerType', array((array)$request));
-        return (float)$response->returnval;
-    }
-
     public function getCPUProfiles($arg_architecture, $arg_namePattern)
     {
         $request = new stdClass();
@@ -8269,6 +8808,23 @@ class ISystemProperties extends VBox_ManagedObject
         $request->namePattern = $arg_namePattern;
         $response = $this->connection->__soapCall('ISystemProperties_getCPUProfiles', array((array)$request));
         return new ICPUProfileCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getExecutionEnginesForVmCpuArchitecture($arg_cpuArchitecture)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->cpuArchitecture = $arg_cpuArchitecture;
+        $response = $this->connection->__soapCall('ISystemProperties_getExecutionEnginesForVmCpuArchitecture', array((array)$request));
+        return new VMExecutionEngineCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getPlatform()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('ISystemProperties_getPlatform', array((array)$request));
+        return new IPlatformProperties ($this->connection, $response->returnval);
     }
 
     public function getMinGuestRAM()
@@ -8333,61 +8889,6 @@ class ISystemProperties extends VBox_ManagedObject
         $request->_this = $this->handle;
         $response = $this->connection->__soapCall('ISystemProperties_getInfoVDSize', array((array)$request));
         return (float)$response->returnval;
-    }
-
-    public function getSerialPortCount()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSerialPortCount', array((array)$request));
-        return (float)$response->returnval;
-    }
-
-    public function getParallelPortCount()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getParallelPortCount', array((array)$request));
-        return (float)$response->returnval;
-    }
-
-    public function getMaxBootPosition()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getMaxBootPosition', array((array)$request));
-        return (float)$response->returnval;
-    }
-
-    public function getRawModeSupported()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getRawModeSupported', array((array)$request));
-        return (bool)$response->returnval;
-    }
-
-    public function getExclusiveHwVirt()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getExclusiveHwVirt', array((array)$request));
-        return (bool)$response->returnval;
-    }
-
-    public function setExclusiveHwVirt($value)
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        if (is_null($value) || is_scalar($value))
-        {
-            $request->exclusiveHwVirt = $value;
-        }
-        else
-        {
-            $request->exclusiveHwVirt = $value->handle;
-        }
-        $this->connection->__soapCall('ISystemProperties_setExclusiveHwVirt', array((array)$request));
     }
 
     public function getDefaultMachineFolder()
@@ -8805,12 +9306,12 @@ class ISystemProperties extends VBox_ManagedObject
         $this->connection->__soapCall('ISystemProperties_setProxyURL', array((array)$request));
     }
 
-    public function getSupportedParavirtProviders()
+    public function getSupportedPlatformArchitectures()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedParavirtProviders', array((array)$request));
-        return new ParavirtProviderCollection ($this->connection, (array)$response->returnval);
+        $response = $this->connection->__soapCall('ISystemProperties_getSupportedPlatformArchitectures', array((array)$request));
+        return new PlatformArchitectureCollection ($this->connection, (array)$response->returnval);
     }
 
     public function getSupportedClipboardModes()
@@ -8827,14 +9328,6 @@ class ISystemProperties extends VBox_ManagedObject
         $request->_this = $this->handle;
         $response = $this->connection->__soapCall('ISystemProperties_getSupportedDnDModes', array((array)$request));
         return new DnDModeCollection ($this->connection, (array)$response->returnval);
-    }
-
-    public function getSupportedFirmwareTypes()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedFirmwareTypes', array((array)$request));
-        return new FirmwareTypeCollection ($this->connection, (array)$response->returnval);
     }
 
     public function getSupportedPointingHIDTypes()
@@ -8875,6 +9368,14 @@ class ISystemProperties extends VBox_ManagedObject
         $request->_this = $this->handle;
         $response = $this->connection->__soapCall('ISystemProperties_getSupportedExportOptions', array((array)$request));
         return new ExportOptionsCollection ($this->connection, (array)$response->returnval);
+    }
+
+    public function getSupportedGraphicsFeatures()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('ISystemProperties_getSupportedGraphicsFeatures', array((array)$request));
+        return new GraphicsFeatureCollection ($this->connection, (array)$response->returnval);
     }
 
     public function getSupportedRecordingFeatures()
@@ -8925,14 +9426,6 @@ class ISystemProperties extends VBox_ManagedObject
         return new RecordingRateControlModeCollection ($this->connection, (array)$response->returnval);
     }
 
-    public function getSupportedGraphicsControllerTypes()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedGraphicsControllerTypes', array((array)$request));
-        return new GraphicsControllerTypeCollection ($this->connection, (array)$response->returnval);
-    }
-
     public function getSupportedCloneOptions()
     {
         $request = new stdClass();
@@ -8965,14 +9458,6 @@ class ISystemProperties extends VBox_ManagedObject
         return new NetworkAttachmentTypeCollection ($this->connection, (array)$response->returnval);
     }
 
-    public function getSupportedNetworkAdapterTypes()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedNetworkAdapterTypes', array((array)$request));
-        return new NetworkAdapterTypeCollection ($this->connection, (array)$response->returnval);
-    }
-
     public function getSupportedPortModes()
     {
         $request = new stdClass();
@@ -8981,76 +9466,12 @@ class ISystemProperties extends VBox_ManagedObject
         return new PortModeCollection ($this->connection, (array)$response->returnval);
     }
 
-    public function getSupportedUartTypes()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedUartTypes', array((array)$request));
-        return new UartTypeCollection ($this->connection, (array)$response->returnval);
-    }
-
-    public function getSupportedUSBControllerTypes()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedUSBControllerTypes', array((array)$request));
-        return new USBControllerTypeCollection ($this->connection, (array)$response->returnval);
-    }
-
     public function getSupportedAudioDriverTypes()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         $response = $this->connection->__soapCall('ISystemProperties_getSupportedAudioDriverTypes', array((array)$request));
         return new AudioDriverTypeCollection ($this->connection, (array)$response->returnval);
-    }
-
-    public function getSupportedAudioControllerTypes()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedAudioControllerTypes', array((array)$request));
-        return new AudioControllerTypeCollection ($this->connection, (array)$response->returnval);
-    }
-
-    public function getSupportedStorageBuses()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedStorageBuses', array((array)$request));
-        return new StorageBusCollection ($this->connection, (array)$response->returnval);
-    }
-
-    public function getSupportedStorageControllerTypes()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedStorageControllerTypes', array((array)$request));
-        return new StorageControllerTypeCollection ($this->connection, (array)$response->returnval);
-    }
-
-    public function getSupportedChipsetTypes()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedChipsetTypes', array((array)$request));
-        return new ChipsetTypeCollection ($this->connection, (array)$response->returnval);
-    }
-
-    public function getSupportedIommuTypes()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedIommuTypes', array((array)$request));
-        return new IommuTypeCollection ($this->connection, (array)$response->returnval);
-    }
-
-    public function getSupportedTpmTypes()
-    {
-        $request = new stdClass();
-        $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISystemProperties_getSupportedTpmTypes', array((array)$request));
-        return new TpmTypeCollection ($this->connection, (array)$response->returnval);
     }
 
     public function getLanguageId()
@@ -9682,12 +10103,13 @@ class IGuestSession extends VBox_ManagedObject
         return new IGuestFsInfo ($this->connection, $response->returnval);
     }
 
-    public function processCreate($arg_executable, $arg_arguments, $arg_environmentChanges, $arg_flags, $arg_timeoutMS)
+    public function processCreate($arg_executable, $arg_arguments, $arg_cwd, $arg_environmentChanges, $arg_flags, $arg_timeoutMS)
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         $request->executable = $arg_executable;
         $request->arguments = $arg_arguments;
+        $request->cwd = $arg_cwd;
         $request->environmentChanges = $arg_environmentChanges;
         $request->flags = $arg_flags;
         $request->timeoutMS = $arg_timeoutMS;
@@ -9695,12 +10117,13 @@ class IGuestSession extends VBox_ManagedObject
         return new IGuestProcess ($this->connection, $response->returnval);
     }
 
-    public function processCreateEx($arg_executable, $arg_arguments, $arg_environmentChanges, $arg_flags, $arg_timeoutMS, $arg_priority, $arg_affinity)
+    public function processCreateEx($arg_executable, $arg_arguments, $arg_cwd, $arg_environmentChanges, $arg_flags, $arg_timeoutMS, $arg_priority, $arg_affinity)
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         $request->executable = $arg_executable;
         $request->arguments = $arg_arguments;
+        $request->cwd = $arg_cwd;
         $request->environmentChanges = $arg_environmentChanges;
         $request->flags = $arg_flags;
         $request->timeoutMS = $arg_timeoutMS;
@@ -9926,6 +10349,14 @@ class IGuestSession extends VBox_ManagedObject
         return (string)$response->returnval;
     }
 
+    public function getMountPoints()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IGuestSession_getMountPoints', array((array)$request));
+        return (array)$response->returnval;
+    }
+
     public function getDirectories()
     {
         $request = new stdClass();
@@ -10138,12 +10569,29 @@ class IDirectory extends VBox_ManagedObject
         return ;
     }
 
+    public function list($arg_maxEntries)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->maxEntries = $arg_maxEntries;
+        $response = $this->connection->__soapCall('IDirectory_list', array((array)$request));
+        return new IFsObjInfoCollection ($this->connection, (array)$response->returnval);
+    }
+
     public function read()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         $response = $this->connection->__soapCall('IDirectory_read', array((array)$request));
         return new IFsObjInfo ($this->connection, $response->returnval);
+    }
+
+    public function rewind()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IDirectory_rewind', array((array)$request));
+        return ;
     }
 
     public function getDirectoryName()
@@ -10154,12 +10602,36 @@ class IDirectory extends VBox_ManagedObject
         return (string)$response->returnval;
     }
 
+    public function getEventSource()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IDirectory_getEventSource', array((array)$request));
+        return new IEventSource ($this->connection, $response->returnval);
+    }
+
     public function getFilter()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         $response = $this->connection->__soapCall('IDirectory_getFilter', array((array)$request));
         return (string)$response->returnval;
+    }
+
+    public function getId()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IDirectory_getId', array((array)$request));
+        return (float)$response->returnval;
+    }
+
+    public function getStatus()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IDirectory_getStatus', array((array)$request));
+        return new DirectoryStatus ($this->connection, $response->returnval);
     }
 }
 
@@ -11487,6 +11959,18 @@ class IMedium extends VBox_ManagedObject
         $request->password = $arg_password;
         $response = $this->connection->__soapCall('IMedium_openForIO', array((array)$request));
         return new IMediumIO ($this->connection, $response->returnval);
+    }
+
+    public function resizeAndCloneTo($arg_target, $arg_logicalSize, $arg_variant, $arg_parent)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->target = $arg_target;
+        $request->logicalSize = $arg_logicalSize;
+        $request->variant = $arg_variant;
+        $request->parent = $arg_parent;
+        $response = $this->connection->__soapCall('IMedium_resizeAndCloneTo', array((array)$request));
+        return new IProgress ($this->connection, $response->returnval);
     }
 
     public function getId()
@@ -13242,27 +13726,27 @@ class ISerialPort extends VBox_ManagedObject
         $this->connection->__soapCall('ISerialPort_setEnabled', array((array)$request));
     }
 
-    public function getIOBase()
+    public function getIOAddress()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('ISerialPort_getIOBase', array((array)$request));
+        $response = $this->connection->__soapCall('ISerialPort_getIOAddress', array((array)$request));
         return (float)$response->returnval;
     }
 
-    public function setIOBase($value)
+    public function setIOAddress($value)
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         if (is_null($value) || is_scalar($value))
         {
-            $request->IOBase = $value;
+            $request->IOAddress = $value;
         }
         else
         {
-            $request->IOBase = $value->handle;
+            $request->IOAddress = $value->handle;
         }
-        $this->connection->__soapCall('ISerialPort_setIOBase', array((array)$request));
+        $this->connection->__soapCall('ISerialPort_setIOAddress', array((array)$request));
     }
 
     public function getIRQ()
@@ -15313,6 +15797,29 @@ class ISharedFolder extends VBox_ManagedObject
         $response = $this->connection->__soapCall('ISharedFolder_getLastAccessError', array((array)$request));
         return (string)$response->returnval;
     }
+
+    public function getSymlinkPolicy()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('ISharedFolder_getSymlinkPolicy', array((array)$request));
+        return new SymlinkPolicy ($this->connection, $response->returnval);
+    }
+
+    public function setSymlinkPolicy($value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        if (is_null($value) || is_scalar($value))
+        {
+            $request->symlinkPolicy = $value;
+        }
+        else
+        {
+            $request->symlinkPolicy = $value->handle;
+        }
+        $this->connection->__soapCall('ISharedFolder_setSymlinkPolicy', array((array)$request));
+    }
 }
 
 /**
@@ -16567,6 +17074,52 @@ class IMachineStateChangedEventCollection extends VBox_ManagedObjectCollection
 /**
  * Generated VBoxWebService Interface Wrapper
  */
+class IExtPackInstalledEvent extends IEvent
+{
+
+    public function getName()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IExtPackInstalledEvent_getName', array((array)$request));
+        return (string)$response->returnval;
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IExtPackInstalledEventCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IExtPackInstalledEvent";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class IExtPackUninstalledEvent extends IEvent
+{
+
+    public function getName()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IExtPackUninstalledEvent_getName', array((array)$request));
+        return (string)$response->returnval;
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IExtPackUninstalledEventCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IExtPackUninstalledEvent";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
 class IMachineDataChangedEvent extends IMachineEvent
 {
 
@@ -17263,6 +17816,60 @@ class IClipboardFileTransferModeChangedEventCollection extends VBox_ManagedObjec
 /**
  * Generated VBoxWebService Interface Wrapper
  */
+class IClipboardEvent extends IEvent
+{
+
+    public function getId()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IClipboardEvent_getId', array((array)$request));
+        return (string)$response->returnval;
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IClipboardEventCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IClipboardEvent";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class IClipboardErrorEvent extends IClipboardEvent
+{
+
+    public function getMsg()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IClipboardErrorEvent_getMsg', array((array)$request));
+        return (string)$response->returnval;
+    }
+
+    public function getRcError()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IClipboardErrorEvent_getRcError', array((array)$request));
+        return (int)$response->returnval;
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IClipboardErrorEventCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IClipboardErrorEvent";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
 class IDnDModeChangedEvent extends IEvent
 {
 
@@ -17744,6 +18351,130 @@ class IGuestProcessOutputEventCollection extends VBox_ManagedObjectCollection
 /**
  * Generated VBoxWebService Interface Wrapper
  */
+class IGuestDirectoryEvent extends IGuestSessionEvent
+{
+
+    public function getDirectory()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IGuestDirectoryEvent_getDirectory', array((array)$request));
+        return new IGuestDirectory ($this->connection, $response->returnval);
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IGuestDirectoryEventCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IGuestDirectoryEvent";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class IGuestDirectoryRegisteredEvent extends IGuestDirectoryEvent
+{
+
+    public function getRegistered()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IGuestDirectoryRegisteredEvent_getRegistered', array((array)$request));
+        return (bool)$response->returnval;
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IGuestDirectoryRegisteredEventCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IGuestDirectoryRegisteredEvent";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class IGuestDirectoryStateChangedEvent extends IGuestDirectoryEvent
+{
+
+    public function getStatus()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IGuestDirectoryStateChangedEvent_getStatus', array((array)$request));
+        return new DirectoryStatus ($this->connection, $response->returnval);
+    }
+
+    public function getError()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IGuestDirectoryStateChangedEvent_getError', array((array)$request));
+        return new IVirtualBoxErrorInfo ($this->connection, $response->returnval);
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IGuestDirectoryStateChangedEventCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IGuestDirectoryStateChangedEvent";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class IGuestDirectoryReadEvent extends IGuestDirectoryEvent
+{
+
+    public function getPath()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IGuestDirectoryReadEvent_getPath', array((array)$request));
+        return (string)$response->returnval;
+    }
+
+    public function getObjInfo()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IGuestDirectoryReadEvent_getObjInfo', array((array)$request));
+        return new IFsObjInfo ($this->connection, $response->returnval);
+    }
+
+    public function getOwner()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IGuestDirectoryReadEvent_getOwner', array((array)$request));
+        return (string)$response->returnval;
+    }
+
+    public function getGroups()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IGuestDirectoryReadEvent_getGroups', array((array)$request));
+        return (string)$response->returnval;
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IGuestDirectoryReadEventCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IGuestDirectoryReadEvent";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
 class IGuestFileEvent extends IGuestSessionEvent
 {
 
@@ -17990,24 +18721,55 @@ class IVRDEServerInfoChangedEventCollection extends VBox_ManagedObjectCollection
 /**
  * Generated VBoxWebService Interface Wrapper
  */
-class IRecordingChangedEvent extends IEvent
+class IRecordingStateChangedEvent extends IEvent
 {
 
-    public function getMidlDoesNotLikeEmptyInterfaces()
+    public function getEnabled()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
-        $response = $this->connection->__soapCall('IRecordingChangedEvent_getMidlDoesNotLikeEmptyInterfaces', array((array)$request));
+        $response = $this->connection->__soapCall('IRecordingStateChangedEvent_getEnabled', array((array)$request));
         return (bool)$response->returnval;
+    }
+
+    public function getError()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IRecordingStateChangedEvent_getError', array((array)$request));
+        return new IVirtualBoxErrorInfo ($this->connection, $response->returnval);
     }
 }
 
 /**
  * Generated VBoxWebService Managed Object Collection
  */
-class IRecordingChangedEventCollection extends VBox_ManagedObjectCollection
+class IRecordingStateChangedEventCollection extends VBox_ManagedObjectCollection
 {
-    protected $_interfaceName = "IRecordingChangedEvent";
+    protected $_interfaceName = "IRecordingStateChangedEvent";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
+class IRecordingScreenStateChangedEvent extends IRecordingStateChangedEvent
+{
+
+    public function getScreen()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IRecordingScreenStateChangedEvent_getScreen', array((array)$request));
+        return (float)$response->returnval;
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IRecordingScreenStateChangedEventCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IRecordingScreenStateChangedEvent";
 }
 
 /**
@@ -19581,6 +20343,62 @@ class IRangedIntegerFormValueCollection extends VBox_ManagedObjectCollection
 /**
  * Generated VBoxWebService Interface Wrapper
  */
+class IRangedInteger64FormValue extends IFormValue
+{
+
+    public function getInteger()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IRangedInteger64FormValue_getInteger', array((array)$request));
+        return (float)$response->returnval;
+    }
+
+    public function setInteger($arg_value)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->value = $arg_value;
+        $response = $this->connection->__soapCall('IRangedInteger64FormValue_setInteger', array((array)$request));
+        return new IProgress ($this->connection, $response->returnval);
+    }
+
+    public function getSuffix()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IRangedInteger64FormValue_getSuffix', array((array)$request));
+        return (string)$response->returnval;
+    }
+
+    public function getMinimum()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IRangedInteger64FormValue_getMinimum', array((array)$request));
+        return (float)$response->returnval;
+    }
+
+    public function getMaximum()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('IRangedInteger64FormValue_getMaximum', array((array)$request));
+        return (float)$response->returnval;
+    }
+}
+
+/**
+ * Generated VBoxWebService Managed Object Collection
+ */
+class IRangedInteger64FormValueCollection extends VBox_ManagedObjectCollection
+{
+    protected $_interfaceName = "IRangedInteger64FormValue";
+}
+
+/**
+ * Generated VBoxWebService Interface Wrapper
+ */
 class IStringFormValue extends IFormValue
 {
 
@@ -19845,6 +20663,14 @@ class ICloudMachine extends VBox_ManagedObject
         return new IProgress ($this->connection, $response->returnval);
     }
 
+    public function reset()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('ICloudMachine_reset', array((array)$request));
+        return new IProgress ($this->connection, $response->returnval);
+    }
+
     public function shutdown()
     {
         $request = new stdClass();
@@ -19910,11 +20736,37 @@ class ICloudMachine extends VBox_ManagedObject
         return new IProgress ($this->connection, $response->returnval);
     }
 
+    public function listMetricNames()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('ICloudMachine_listMetricNames', array((array)$request));
+        return array(new IProgress ($this->connection, $response->returnval), new IStringArray ($this->connection, $response->metricNames));
+    }
+
+    public function enumerateMetricData($arg_metricType, $arg_pointsNumber)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->metricType = $arg_metricType;
+        $request->pointsNumber = $arg_pointsNumber;
+        $response = $this->connection->__soapCall('ICloudMachine_enumerateMetricData', array((array)$request));
+        return array(new IProgress ($this->connection, $response->returnval), new IStringArray ($this->connection, $response->values), new IStringArray ($this->connection, $response->timestamps), new IStringArray ($this->connection, $response->unit));
+    }
+
     public function getId()
     {
         $request = new stdClass();
         $request->_this = $this->handle;
         $response = $this->connection->__soapCall('ICloudMachine_getId', array((array)$request));
+        return (string)$response->returnval;
+    }
+
+    public function getCloudId()
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $response = $this->connection->__soapCall('ICloudMachine_getCloudId', array((array)$request));
         return (string)$response->returnval;
     }
 
@@ -20200,6 +21052,25 @@ class ICloudClient extends VBox_ManagedObject
         return new IProgress ($this->connection, $response->returnval);
     }
 
+    public function resetInstance($arg_uid)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->uid = $arg_uid;
+        $response = $this->connection->__soapCall('ICloudClient_resetInstance', array((array)$request));
+        return new IProgress ($this->connection, $response->returnval);
+    }
+
+    public function cloneInstance($arg_uid, $arg_newName)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->uid = $arg_uid;
+        $request->newName = $arg_newName;
+        $response = $this->connection->__soapCall('ICloudClient_cloneInstance', array((array)$request));
+        return array(new IProgress ($this->connection, $response->returnval), new ICloudMachine ($this->connection, $response->clone));
+    }
+
     public function createImage($arg_parameters)
     {
         $request = new stdClass();
@@ -20286,6 +21157,15 @@ class ICloudClient extends VBox_ManagedObject
         $request->description = $arg_description;
         $response = $this->connection->__soapCall('ICloudClient_getSubnetSelectionForm', array((array)$request));
         return array(new IProgress ($this->connection, $response->returnval), new IVirtualSystemDescriptionForm ($this->connection, $response->form));
+    }
+
+    public function getMetricTypeByName($arg_metricName)
+    {
+        $request = new stdClass();
+        $request->_this = $this->handle;
+        $request->metricName = $arg_metricName;
+        $response = $this->connection->__soapCall('ICloudClient_getMetricTypeByName', array((array)$request));
+        return new MetricType ($this->connection, $response->returnval);
     }
 
     public function getCloudMachineList()
@@ -21032,8 +21912,10 @@ class IGuestOSType extends VBox_Struct
     protected $familyId;
     protected $familyDescription;
     protected $id;
+    protected $subtype;
     protected $description;
     protected $is64Bit;
+    protected $platformArchitecture;
     protected $recommendedIOAPIC;
     protected $recommendedVirtEx;
     protected $recommendedRAM;
@@ -21066,6 +21948,7 @@ class IGuestOSType extends VBox_Struct
     protected $recommendedTpmType;
     protected $recommendedSecureBoot;
     protected $recommendedWDDMGraphics;
+    protected $guestAdditionsInstallPackageName;
 
     public function __construct($connection, $values)
     {
@@ -21073,8 +21956,10 @@ class IGuestOSType extends VBox_Struct
         $this->familyId = $values->familyId;
         $this->familyDescription = $values->familyDescription;
         $this->id = $values->id;
+        $this->subtype = $values->subtype;
         $this->description = $values->description;
         $this->is64Bit = $values->is64Bit;
+        $this->platformArchitecture = $values->platformArchitecture;
         $this->recommendedIOAPIC = $values->recommendedIOAPIC;
         $this->recommendedVirtEx = $values->recommendedVirtEx;
         $this->recommendedRAM = $values->recommendedRAM;
@@ -21107,6 +21992,7 @@ class IGuestOSType extends VBox_Struct
         $this->recommendedTpmType = $values->recommendedTpmType;
         $this->recommendedSecureBoot = $values->recommendedSecureBoot;
         $this->recommendedWDDMGraphics = $values->recommendedWDDMGraphics;
+        $this->guestAdditionsInstallPackageName = $values->guestAdditionsInstallPackageName;
     }
 
     public function getFamilyId()
@@ -21121,6 +22007,10 @@ class IGuestOSType extends VBox_Struct
     {
         return (string)$this->id;
     }
+    public function getSubtype()
+    {
+        return (string)$this->subtype;
+    }
     public function getDescription()
     {
         return (string)$this->description;
@@ -21128,6 +22018,10 @@ class IGuestOSType extends VBox_Struct
     public function getIs64Bit()
     {
         return (bool)$this->is64Bit;
+    }
+    public function getPlatformArchitecture()
+    {
+        return new PlatformArchitecture ($this->connection, $this->platformArchitecture);
     }
     public function getRecommendedIOAPIC()
     {
@@ -21256,6 +22150,10 @@ class IGuestOSType extends VBox_Struct
     public function getRecommendedWDDMGraphics()
     {
         return (bool)$this->recommendedWDDMGraphics;
+    }
+    public function getGuestAdditionsInstallPackageName()
+    {
+        return (string)$this->guestAdditionsInstallPackageName;
     }
 }
 
@@ -21422,8 +22320,8 @@ class IMediumAttachmentCollection extends VBox_StructCollection
  */
 class SettingsVersion extends VBox_Enum
 {
-    public $NameMap = array(0 => 'Null', 1 => 'v1_0', 2 => 'v1_1', 3 => 'v1_2', 4 => 'v1_3pre', 5 => 'v1_3', 6 => 'v1_4', 7 => 'v1_5', 8 => 'v1_6', 9 => 'v1_7', 10 => 'v1_8', 11 => 'v1_9', 12 => 'v1_10', 13 => 'v1_11', 14 => 'v1_12', 15 => 'v1_13', 16 => 'v1_14', 17 => 'v1_15', 18 => 'v1_16', 19 => 'v1_17', 20 => 'v1_18', 21 => 'v1_19', 99999 => 'Future');
-    public $ValueMap = array('Null' => 0, 'v1_0' => 1, 'v1_1' => 2, 'v1_2' => 3, 'v1_3pre' => 4, 'v1_3' => 5, 'v1_4' => 6, 'v1_5' => 7, 'v1_6' => 8, 'v1_7' => 9, 'v1_8' => 10, 'v1_9' => 11, 'v1_10' => 12, 'v1_11' => 13, 'v1_12' => 14, 'v1_13' => 15, 'v1_14' => 16, 'v1_15' => 17, 'v1_16' => 18, 'v1_17' => 19, 'v1_18' => 20, 'v1_19' => 21, 'Future' => 99999);
+    public $NameMap = array(0 => 'Null', 1 => 'v1_0', 2 => 'v1_1', 3 => 'v1_2', 4 => 'v1_3pre', 5 => 'v1_3', 6 => 'v1_4', 7 => 'v1_5', 8 => 'v1_6', 9 => 'v1_7', 10 => 'v1_8', 11 => 'v1_9', 12 => 'v1_10', 13 => 'v1_11', 14 => 'v1_12', 15 => 'v1_13', 16 => 'v1_14', 17 => 'v1_15', 18 => 'v1_16', 19 => 'v1_17', 20 => 'v1_18', 21 => 'v1_19', 22 => 'v1_20', 99999 => 'Future');
+    public $ValueMap = array('Null' => 0, 'v1_0' => 1, 'v1_1' => 2, 'v1_2' => 3, 'v1_3pre' => 4, 'v1_3' => 5, 'v1_4' => 6, 'v1_5' => 7, 'v1_6' => 8, 'v1_7' => 9, 'v1_8' => 10, 'v1_9' => 11, 'v1_10' => 12, 'v1_11' => 13, 'v1_12' => 14, 'v1_13' => 15, 'v1_14' => 16, 'v1_15' => 17, 'v1_16' => 18, 'v1_17' => 19, 'v1_18' => 20, 'v1_19' => 21, 'v1_20' => 22, 'Future' => 99999);
 }
 
 /**
@@ -21488,10 +22386,27 @@ class SessionStateCollection extends VBox_EnumCollection
 /**
  * Generated VBoxWebService ENUM
  */
+class PlatformArchitecture extends VBox_Enum
+{
+    public $NameMap = array(0 => 'None', 1 => 'x86', 2 => 'ARM');
+    public $ValueMap = array('None' => 0, 'x86' => 1, 'ARM' => 2);
+}
+
+/**
+ * Generated VBoxWebService Enum Collection
+ */
+class PlatformArchitectureCollection extends VBox_EnumCollection
+{
+    protected $_interfaceName = "PlatformArchitecture";
+}
+
+/**
+ * Generated VBoxWebService ENUM
+ */
 class CPUArchitecture extends VBox_Enum
 {
-    public $NameMap = array(0 => 'Any', 1 => 'x86', 2 => 'AMD64');
-    public $ValueMap = array('Any' => 0, 'x86' => 1, 'AMD64' => 2);
+    public $NameMap = array(0 => 'Any', 1 => 'x86', 2 => 'AMD64', 3 => 'ARMv8_32', 4 => 'ARMv8_64');
+    public $ValueMap = array('Any' => 0, 'x86' => 1, 'AMD64' => 2, 'ARMv8_32' => 3, 'ARMv8_64' => 4);
 }
 
 /**
@@ -21505,7 +22420,7 @@ class CPUArchitectureCollection extends VBox_EnumCollection
 /**
  * Generated VBoxWebService ENUM
  */
-class CPUPropertyType extends VBox_Enum
+class CPUPropertyTypeX86 extends VBox_Enum
 {
     public $NameMap = array(0 => 'Null', 1 => 'PAE', 2 => 'LongMode', 3 => 'TripleFaultReset', 4 => 'APIC', 5 => 'X2APIC', 6 => 'IBPBOnVMExit', 7 => 'IBPBOnVMEntry', 8 => 'HWVirt', 9 => 'SpecCtrl', 10 => 'SpecCtrlByHost', 11 => 'L1DFlushOnEMTScheduling', 12 => 'L1DFlushOnVMEntry', 13 => 'MDSClearOnEMTScheduling', 14 => 'MDSClearOnVMEntry');
     public $ValueMap = array('Null' => 0, 'PAE' => 1, 'LongMode' => 2, 'TripleFaultReset' => 3, 'APIC' => 4, 'X2APIC' => 5, 'IBPBOnVMExit' => 6, 'IBPBOnVMEntry' => 7, 'HWVirt' => 8, 'SpecCtrl' => 9, 'SpecCtrlByHost' => 10, 'L1DFlushOnEMTScheduling' => 11, 'L1DFlushOnVMEntry' => 12, 'MDSClearOnEMTScheduling' => 13, 'MDSClearOnVMEntry' => 14);
@@ -21514,9 +22429,9 @@ class CPUPropertyType extends VBox_Enum
 /**
  * Generated VBoxWebService Enum Collection
  */
-class CPUPropertyTypeCollection extends VBox_EnumCollection
+class CPUPropertyTypeX86Collection extends VBox_EnumCollection
 {
-    protected $_interfaceName = "CPUPropertyType";
+    protected $_interfaceName = "CPUPropertyTypeX86";
 }
 
 /**
@@ -21592,8 +22507,8 @@ class SessionTypeCollection extends VBox_EnumCollection
  */
 class DeviceType extends VBox_Enum
 {
-    public $NameMap = array(0 => 'Null', 1 => 'Floppy', 2 => 'DVD', 3 => 'HardDisk', 4 => 'Network', 5 => 'USB', 6 => 'SharedFolder', 7 => 'Graphics3D');
-    public $ValueMap = array('Null' => 0, 'Floppy' => 1, 'DVD' => 2, 'HardDisk' => 3, 'Network' => 4, 'USB' => 5, 'SharedFolder' => 6, 'Graphics3D' => 7);
+    public $NameMap = array(0 => 'Null', 1 => 'Floppy', 2 => 'DVD', 3 => 'HardDisk', 4 => 'Network', 5 => 'USB', 6 => 'SharedFolder', 7 => 'Graphics3D', 8 => 'End');
+    public $ValueMap = array('Null' => 0, 'Floppy' => 1, 'DVD' => 2, 'HardDisk' => 3, 'Network' => 4, 'USB' => 5, 'SharedFolder' => 6, 'Graphics3D' => 7, 'End' => 8);
 }
 
 /**
@@ -21675,7 +22590,7 @@ class ScopeCollection extends VBox_EnumCollection
 /**
  * Generated VBoxWebService ENUM
  */
-class BIOSBootMenuMode extends VBox_Enum
+class FirmwareBootMenuMode extends VBox_Enum
 {
     public $NameMap = array(0 => 'Disabled', 1 => 'MenuOnly', 2 => 'MessageAndMenu');
     public $ValueMap = array('Disabled' => 0, 'MenuOnly' => 1, 'MessageAndMenu' => 2);
@@ -21684,9 +22599,9 @@ class BIOSBootMenuMode extends VBox_Enum
 /**
  * Generated VBoxWebService Enum Collection
  */
-class BIOSBootMenuModeCollection extends VBox_EnumCollection
+class FirmwareBootMenuModeCollection extends VBox_EnumCollection
 {
-    protected $_interfaceName = "BIOSBootMenuMode";
+    protected $_interfaceName = "FirmwareBootMenuMode";
 }
 
 /**
@@ -21966,8 +22881,8 @@ class CertificateVersionCollection extends VBox_EnumCollection
  */
 class VirtualSystemDescriptionType extends VBox_Enum
 {
-    public $NameMap = array(1 => 'Ignore', 2 => 'OS', 3 => 'Name', 4 => 'Product', 5 => 'Vendor', 6 => 'Version', 7 => 'ProductUrl', 8 => 'VendorUrl', 9 => 'Description', 10 => 'License', 11 => 'Miscellaneous', 12 => 'CPU', 13 => 'Memory', 14 => 'HardDiskControllerIDE', 15 => 'HardDiskControllerSATA', 16 => 'HardDiskControllerSCSI', 17 => 'HardDiskControllerSAS', 18 => 'HardDiskImage', 19 => 'Floppy', 20 => 'CDROM', 21 => 'NetworkAdapter', 22 => 'USBController', 23 => 'SoundCard', 24 => 'SettingsFile', 25 => 'BaseFolder', 26 => 'PrimaryGroup', 27 => 'CloudInstanceShape', 28 => 'CloudDomain', 29 => 'CloudBootDiskSize', 30 => 'CloudBucket', 31 => 'CloudOCIVCN', 32 => 'CloudPublicIP', 33 => 'CloudProfileName', 34 => 'CloudOCISubnet', 35 => 'CloudKeepObject', 36 => 'CloudLaunchInstance', 37 => 'CloudInstanceId', 38 => 'CloudImageId', 39 => 'CloudInstanceState', 40 => 'CloudImageState', 41 => 'CloudInstanceDisplayName', 42 => 'CloudImageDisplayName', 43 => 'CloudOCILaunchMode', 44 => 'CloudPrivateIP', 45 => 'CloudBootVolumeId', 46 => 'CloudOCIVCNCompartment', 47 => 'CloudOCISubnetCompartment', 48 => 'CloudPublicSSHKey', 49 => 'BootingFirmware', 50 => 'CloudInitScriptPath', 51 => 'CloudCompartmentId', 52 => 'CloudShapeCpus', 53 => 'CloudShapeMemory', 60 => 'HardDiskControllerVirtioSCSI');
-    public $ValueMap = array('Ignore' => 1, 'OS' => 2, 'Name' => 3, 'Product' => 4, 'Vendor' => 5, 'Version' => 6, 'ProductUrl' => 7, 'VendorUrl' => 8, 'Description' => 9, 'License' => 10, 'Miscellaneous' => 11, 'CPU' => 12, 'Memory' => 13, 'HardDiskControllerIDE' => 14, 'HardDiskControllerSATA' => 15, 'HardDiskControllerSCSI' => 16, 'HardDiskControllerSAS' => 17, 'HardDiskImage' => 18, 'Floppy' => 19, 'CDROM' => 20, 'NetworkAdapter' => 21, 'USBController' => 22, 'SoundCard' => 23, 'SettingsFile' => 24, 'BaseFolder' => 25, 'PrimaryGroup' => 26, 'CloudInstanceShape' => 27, 'CloudDomain' => 28, 'CloudBootDiskSize' => 29, 'CloudBucket' => 30, 'CloudOCIVCN' => 31, 'CloudPublicIP' => 32, 'CloudProfileName' => 33, 'CloudOCISubnet' => 34, 'CloudKeepObject' => 35, 'CloudLaunchInstance' => 36, 'CloudInstanceId' => 37, 'CloudImageId' => 38, 'CloudInstanceState' => 39, 'CloudImageState' => 40, 'CloudInstanceDisplayName' => 41, 'CloudImageDisplayName' => 42, 'CloudOCILaunchMode' => 43, 'CloudPrivateIP' => 44, 'CloudBootVolumeId' => 45, 'CloudOCIVCNCompartment' => 46, 'CloudOCISubnetCompartment' => 47, 'CloudPublicSSHKey' => 48, 'BootingFirmware' => 49, 'CloudInitScriptPath' => 50, 'CloudCompartmentId' => 51, 'CloudShapeCpus' => 52, 'CloudShapeMemory' => 53, 'HardDiskControllerVirtioSCSI' => 60);
+    public $NameMap = array(1 => 'Ignore', 2 => 'OS', 3 => 'Name', 4 => 'Product', 5 => 'Vendor', 6 => 'Version', 7 => 'ProductUrl', 8 => 'VendorUrl', 9 => 'Description', 10 => 'License', 11 => 'Miscellaneous', 12 => 'CPU', 13 => 'Memory', 14 => 'HardDiskControllerIDE', 15 => 'HardDiskControllerSATA', 16 => 'HardDiskControllerSCSI', 17 => 'HardDiskControllerSAS', 18 => 'HardDiskImage', 19 => 'Floppy', 20 => 'CDROM', 21 => 'NetworkAdapter', 22 => 'USBController', 23 => 'SoundCard', 24 => 'SettingsFile', 25 => 'BaseFolder', 26 => 'PrimaryGroup', 27 => 'CloudInstanceShape', 28 => 'CloudDomain', 29 => 'CloudBootDiskSize', 30 => 'CloudBucket', 31 => 'CloudOCIVCN', 32 => 'CloudPublicIP', 33 => 'CloudProfileName', 34 => 'CloudOCISubnet', 35 => 'CloudKeepObject', 36 => 'CloudLaunchInstance', 37 => 'CloudInstanceId', 38 => 'CloudImageId', 39 => 'CloudInstanceState', 40 => 'CloudImageState', 41 => 'CloudInstanceDisplayName', 42 => 'CloudImageDisplayName', 43 => 'CloudOCILaunchMode', 44 => 'CloudPrivateIP', 45 => 'CloudBootVolumeId', 46 => 'CloudOCIVCNCompartment', 47 => 'CloudOCISubnetCompartment', 48 => 'CloudPublicSSHKey', 49 => 'BootingFirmware', 50 => 'CloudInitScriptPath', 51 => 'CloudCompartmentId', 52 => 'CloudShapeCpus', 53 => 'CloudShapeMemory', 54 => 'CloudInstanceMetadata', 55 => 'CloudInstanceFreeFormTags', 56 => 'CloudImageFreeFormTags', 60 => 'HardDiskControllerVirtioSCSI', 61 => 'HardDiskControllerNVMe');
+    public $ValueMap = array('Ignore' => 1, 'OS' => 2, 'Name' => 3, 'Product' => 4, 'Vendor' => 5, 'Version' => 6, 'ProductUrl' => 7, 'VendorUrl' => 8, 'Description' => 9, 'License' => 10, 'Miscellaneous' => 11, 'CPU' => 12, 'Memory' => 13, 'HardDiskControllerIDE' => 14, 'HardDiskControllerSATA' => 15, 'HardDiskControllerSCSI' => 16, 'HardDiskControllerSAS' => 17, 'HardDiskImage' => 18, 'Floppy' => 19, 'CDROM' => 20, 'NetworkAdapter' => 21, 'USBController' => 22, 'SoundCard' => 23, 'SettingsFile' => 24, 'BaseFolder' => 25, 'PrimaryGroup' => 26, 'CloudInstanceShape' => 27, 'CloudDomain' => 28, 'CloudBootDiskSize' => 29, 'CloudBucket' => 30, 'CloudOCIVCN' => 31, 'CloudPublicIP' => 32, 'CloudProfileName' => 33, 'CloudOCISubnet' => 34, 'CloudKeepObject' => 35, 'CloudLaunchInstance' => 36, 'CloudInstanceId' => 37, 'CloudImageId' => 38, 'CloudInstanceState' => 39, 'CloudImageState' => 40, 'CloudInstanceDisplayName' => 41, 'CloudImageDisplayName' => 42, 'CloudOCILaunchMode' => 43, 'CloudPrivateIP' => 44, 'CloudBootVolumeId' => 45, 'CloudOCIVCNCompartment' => 46, 'CloudOCISubnetCompartment' => 47, 'CloudPublicSSHKey' => 48, 'BootingFirmware' => 49, 'CloudInitScriptPath' => 50, 'CloudCompartmentId' => 51, 'CloudShapeCpus' => 52, 'CloudShapeMemory' => 53, 'CloudInstanceMetadata' => 54, 'CloudInstanceFreeFormTags' => 55, 'CloudImageFreeFormTags' => 56, 'HardDiskControllerVirtioSCSI' => 60, 'HardDiskControllerNVMe' => 61);
 }
 
 /**
@@ -22170,8 +23085,8 @@ class UefiVariableAttributesCollection extends VBox_EnumCollection
  */
 class GraphicsControllerType extends VBox_Enum
 {
-    public $NameMap = array(0 => 'Null', 1 => 'VBoxVGA', 2 => 'VMSVGA', 3 => 'VBoxSVGA');
-    public $ValueMap = array('Null' => 0, 'VBoxVGA' => 1, 'VMSVGA' => 2, 'VBoxSVGA' => 3);
+    public $NameMap = array(0 => 'Null', 1 => 'VBoxVGA', 2 => 'VMSVGA', 3 => 'VBoxSVGA', 4 => 'QemuRamFB');
+    public $ValueMap = array('Null' => 0, 'VBoxVGA' => 1, 'VMSVGA' => 2, 'VBoxSVGA' => 3, 'QemuRamFB' => 4);
 }
 
 /**
@@ -22185,10 +23100,27 @@ class GraphicsControllerTypeCollection extends VBox_EnumCollection
 /**
  * Generated VBoxWebService ENUM
  */
+class GraphicsFeature extends VBox_Enum
+{
+    public $NameMap = array(0 => 'None', 1 => 'Acceleration2DVideo', 2 => 'Acceleration3D');
+    public $ValueMap = array('None' => 0, 'Acceleration2DVideo' => 1, 'Acceleration3D' => 2);
+}
+
+/**
+ * Generated VBoxWebService Enum Collection
+ */
+class GraphicsFeatureCollection extends VBox_EnumCollection
+{
+    protected $_interfaceName = "GraphicsFeature";
+}
+
+/**
+ * Generated VBoxWebService ENUM
+ */
 class CleanupMode extends VBox_Enum
 {
-    public $NameMap = array(1 => 'UnregisterOnly', 2 => 'DetachAllReturnNone', 3 => 'DetachAllReturnHardDisksOnly', 4 => 'Full');
-    public $ValueMap = array('UnregisterOnly' => 1, 'DetachAllReturnNone' => 2, 'DetachAllReturnHardDisksOnly' => 3, 'Full' => 4);
+    public $NameMap = array(1 => 'UnregisterOnly', 2 => 'DetachAllReturnNone', 3 => 'DetachAllReturnHardDisksOnly', 4 => 'Full', 5 => 'DetachAllReturnHardDisksAndVMRemovable');
+    public $ValueMap = array('UnregisterOnly' => 1, 'DetachAllReturnNone' => 2, 'DetachAllReturnHardDisksOnly' => 3, 'Full' => 4, 'DetachAllReturnHardDisksAndVMRemovable' => 5);
 }
 
 /**
@@ -22282,6 +23214,23 @@ class IommuType extends VBox_Enum
 class IommuTypeCollection extends VBox_EnumCollection
 {
     protected $_interfaceName = "IommuType";
+}
+
+/**
+ * Generated VBoxWebService ENUM
+ */
+class VMExecutionEngine extends VBox_Enum
+{
+    public $NameMap = array(0 => 'NotSet', 1 => 'Default', 2 => 'HwVirt', 3 => 'NativeApi', 4 => 'Interpreter', 5 => 'Recompiler');
+    public $ValueMap = array('NotSet' => 0, 'Default' => 1, 'HwVirt' => 2, 'NativeApi' => 3, 'Interpreter' => 4, 'Recompiler' => 5);
+}
+
+/**
+ * Generated VBoxWebService Enum Collection
+ */
+class VMExecutionEngineCollection extends VBox_EnumCollection
+{
+    protected $_interfaceName = "VMExecutionEngine";
 }
 
 /**
@@ -22882,6 +23831,23 @@ class PathStyleCollection extends VBox_EnumCollection
 /**
  * Generated VBoxWebService ENUM
  */
+class DirectoryStatus extends VBox_Enum
+{
+    public $NameMap = array(0 => 'Undefined', 1 => 'Open', 2 => 'Close', 3 => 'Rewind', 4 => 'Down', 5 => 'Error');
+    public $ValueMap = array('Undefined' => 0, 'Open' => 1, 'Close' => 2, 'Rewind' => 3, 'Down' => 4, 'Error' => 5);
+}
+
+/**
+ * Generated VBoxWebService Enum Collection
+ */
+class DirectoryStatusCollection extends VBox_EnumCollection
+{
+    protected $_interfaceName = "DirectoryStatus";
+}
+
+/**
+ * Generated VBoxWebService ENUM
+ */
 class FileAccessMode extends VBox_Enum
 {
     public $NameMap = array(1 => 'ReadOnly', 2 => 'WriteOnly', 3 => 'ReadWrite', 4 => 'AppendOnly', 5 => 'AppendRead');
@@ -23003,8 +23969,8 @@ class DnDActionCollection extends VBox_EnumCollection
  */
 class DirectoryOpenFlag extends VBox_Enum
 {
-    public $NameMap = array(0 => 'None', 1 => 'NoSymlinks');
-    public $ValueMap = array('None' => 0, 'NoSymlinks' => 1);
+    public $NameMap = array(0 => 'None', 1 => 'NoSymlinks', 2 => 'DenyAscent', 4 => 'NoFollowSymlinks');
+    public $ValueMap = array('None' => 0, 'NoSymlinks' => 1, 'DenyAscent' => 2, 'NoFollowSymlinks' => 4);
 }
 
 /**
@@ -23324,23 +24290,6 @@ class UartTypeCollection extends VBox_EnumCollection
 /**
  * Generated VBoxWebService ENUM
  */
-class VMExecutionEngine extends VBox_Enum
-{
-    public $NameMap = array(0 => 'NotSet', 1 => 'Emulated', 2 => 'HwVirt', 3 => 'NativeApi');
-    public $ValueMap = array('NotSet' => 0, 'Emulated' => 1, 'HwVirt' => 2, 'NativeApi' => 3);
-}
-
-/**
- * Generated VBoxWebService Enum Collection
- */
-class VMExecutionEngineCollection extends VBox_EnumCollection
-{
-    protected $_interfaceName = "VMExecutionEngine";
-}
-
-/**
- * Generated VBoxWebService ENUM
- */
 class USBControllerType extends VBox_Enum
 {
     public $NameMap = array(0 => 'Null', 1 => 'OHCI', 2 => 'EHCI', 3 => 'XHCI', 4 => 'Last');
@@ -23428,8 +24377,8 @@ class AudioDriverTypeCollection extends VBox_EnumCollection
  */
 class AudioControllerType extends VBox_Enum
 {
-    public $NameMap = array(0 => 'AC97', 1 => 'SB16', 2 => 'HDA');
-    public $ValueMap = array('AC97' => 0, 'SB16' => 1, 'HDA' => 2);
+    public $NameMap = array(0 => 'AC97', 1 => 'SB16', 2 => 'HDA', 3 => 'VirtioSound');
+    public $ValueMap = array('AC97' => 0, 'SB16' => 1, 'HDA' => 2, 'VirtioSound' => 3);
 }
 
 /**
@@ -23581,8 +24530,8 @@ class StorageControllerTypeCollection extends VBox_EnumCollection
  */
 class ChipsetType extends VBox_Enum
 {
-    public $NameMap = array(0 => 'Null', 1 => 'PIIX3', 2 => 'ICH9');
-    public $ValueMap = array('Null' => 0, 'PIIX3' => 1, 'ICH9' => 2);
+    public $NameMap = array(0 => 'Null', 1 => 'PIIX3', 2 => 'ICH9', 3 => 'ARMv8Virtual');
+    public $ValueMap = array('Null' => 0, 'PIIX3' => 1, 'ICH9' => 2, 'ARMv8Virtual' => 3);
 }
 
 /**
@@ -23683,8 +24632,8 @@ class GuestDebugIoProviderCollection extends VBox_EnumCollection
  */
 class VBoxEventType extends VBox_Enum
 {
-    public $NameMap = array(0 => 'Invalid', 1 => 'Any', 2 => 'Vetoable', 3 => 'MachineEvent', 4 => 'SnapshotEvent', 5 => 'InputEvent', 31 => 'LastWildcard', 32 => 'OnMachineStateChanged', 33 => 'OnMachineDataChanged', 34 => 'OnExtraDataChanged', 35 => 'OnExtraDataCanChange', 36 => 'OnMediumRegistered', 37 => 'OnMachineRegistered', 38 => 'OnSessionStateChanged', 39 => 'OnSnapshotTaken', 40 => 'OnSnapshotDeleted', 41 => 'OnSnapshotChanged', 42 => 'OnGuestPropertyChanged', 43 => 'OnMousePointerShapeChanged', 44 => 'OnMouseCapabilityChanged', 45 => 'OnKeyboardLedsChanged', 46 => 'OnStateChanged', 47 => 'OnAdditionsStateChanged', 48 => 'OnNetworkAdapterChanged', 49 => 'OnSerialPortChanged', 50 => 'OnParallelPortChanged', 51 => 'OnStorageControllerChanged', 52 => 'OnMediumChanged', 53 => 'OnVRDEServerChanged', 54 => 'OnUSBControllerChanged', 55 => 'OnUSBDeviceStateChanged', 56 => 'OnSharedFolderChanged', 57 => 'OnRuntimeError', 58 => 'OnCanShowWindow', 59 => 'OnShowWindow', 60 => 'OnCPUChanged', 61 => 'OnVRDEServerInfoChanged', 62 => 'OnEventSourceChanged', 63 => 'OnCPUExecutionCapChanged', 64 => 'OnGuestKeyboard', 65 => 'OnGuestMouse', 66 => 'OnNATRedirect', 67 => 'OnHostPCIDevicePlug', 68 => 'OnVBoxSVCAvailabilityChanged', 69 => 'OnBandwidthGroupChanged', 70 => 'OnGuestMonitorChanged', 71 => 'OnStorageDeviceChanged', 72 => 'OnClipboardModeChanged', 73 => 'OnDnDModeChanged', 74 => 'OnNATNetworkChanged', 75 => 'OnNATNetworkStartStop', 76 => 'OnNATNetworkAlter', 77 => 'OnNATNetworkCreationDeletion', 78 => 'OnNATNetworkSetting', 79 => 'OnNATNetworkPortForward', 80 => 'OnGuestSessionStateChanged', 81 => 'OnGuestSessionRegistered', 82 => 'OnGuestProcessRegistered', 83 => 'OnGuestProcessStateChanged', 84 => 'OnGuestProcessInputNotify', 85 => 'OnGuestProcessOutput', 86 => 'OnGuestFileRegistered', 87 => 'OnGuestFileStateChanged', 88 => 'OnGuestFileOffsetChanged', 89 => 'OnGuestFileRead', 90 => 'OnGuestFileWrite', 91 => 'OnRecordingChanged', 92 => 'OnGuestUserStateChanged', 93 => 'OnGuestMultiTouch', 94 => 'OnHostNameResolutionConfigurationChange', 95 => 'OnSnapshotRestored', 96 => 'OnMediumConfigChanged', 97 => 'OnAudioAdapterChanged', 98 => 'OnProgressPercentageChanged', 99 => 'OnProgressTaskCompleted', 100 => 'OnCursorPositionChanged', 101 => 'OnGuestAdditionsStatusChanged', 102 => 'OnGuestMonitorInfoChanged', 103 => 'OnGuestFileSizeChanged', 104 => 'OnClipboardFileTransferModeChanged', 105 => 'OnCloudProviderListChanged', 106 => 'OnCloudProviderRegistered', 107 => 'OnCloudProviderUninstall', 108 => 'OnCloudProfileRegistered', 109 => 'OnCloudProfileChanged', 110 => 'OnProgressCreated', 111 => 'OnLanguageChanged', 112 => 'OnUpdateAgentAvailable', 113 => 'OnUpdateAgentError', 114 => 'OnUpdateAgentSettingsChanged', 115 => 'OnUpdateAgentStateChanged', 116 => 'OnHostAudioDeviceChanged', 117 => 'OnGuestDebugControlChanged', 118 => 'OnMachineGroupsChanged', 119 => 'End');
-    public $ValueMap = array('Invalid' => 0, 'Any' => 1, 'Vetoable' => 2, 'MachineEvent' => 3, 'SnapshotEvent' => 4, 'InputEvent' => 5, 'LastWildcard' => 31, 'OnMachineStateChanged' => 32, 'OnMachineDataChanged' => 33, 'OnExtraDataChanged' => 34, 'OnExtraDataCanChange' => 35, 'OnMediumRegistered' => 36, 'OnMachineRegistered' => 37, 'OnSessionStateChanged' => 38, 'OnSnapshotTaken' => 39, 'OnSnapshotDeleted' => 40, 'OnSnapshotChanged' => 41, 'OnGuestPropertyChanged' => 42, 'OnMousePointerShapeChanged' => 43, 'OnMouseCapabilityChanged' => 44, 'OnKeyboardLedsChanged' => 45, 'OnStateChanged' => 46, 'OnAdditionsStateChanged' => 47, 'OnNetworkAdapterChanged' => 48, 'OnSerialPortChanged' => 49, 'OnParallelPortChanged' => 50, 'OnStorageControllerChanged' => 51, 'OnMediumChanged' => 52, 'OnVRDEServerChanged' => 53, 'OnUSBControllerChanged' => 54, 'OnUSBDeviceStateChanged' => 55, 'OnSharedFolderChanged' => 56, 'OnRuntimeError' => 57, 'OnCanShowWindow' => 58, 'OnShowWindow' => 59, 'OnCPUChanged' => 60, 'OnVRDEServerInfoChanged' => 61, 'OnEventSourceChanged' => 62, 'OnCPUExecutionCapChanged' => 63, 'OnGuestKeyboard' => 64, 'OnGuestMouse' => 65, 'OnNATRedirect' => 66, 'OnHostPCIDevicePlug' => 67, 'OnVBoxSVCAvailabilityChanged' => 68, 'OnBandwidthGroupChanged' => 69, 'OnGuestMonitorChanged' => 70, 'OnStorageDeviceChanged' => 71, 'OnClipboardModeChanged' => 72, 'OnDnDModeChanged' => 73, 'OnNATNetworkChanged' => 74, 'OnNATNetworkStartStop' => 75, 'OnNATNetworkAlter' => 76, 'OnNATNetworkCreationDeletion' => 77, 'OnNATNetworkSetting' => 78, 'OnNATNetworkPortForward' => 79, 'OnGuestSessionStateChanged' => 80, 'OnGuestSessionRegistered' => 81, 'OnGuestProcessRegistered' => 82, 'OnGuestProcessStateChanged' => 83, 'OnGuestProcessInputNotify' => 84, 'OnGuestProcessOutput' => 85, 'OnGuestFileRegistered' => 86, 'OnGuestFileStateChanged' => 87, 'OnGuestFileOffsetChanged' => 88, 'OnGuestFileRead' => 89, 'OnGuestFileWrite' => 90, 'OnRecordingChanged' => 91, 'OnGuestUserStateChanged' => 92, 'OnGuestMultiTouch' => 93, 'OnHostNameResolutionConfigurationChange' => 94, 'OnSnapshotRestored' => 95, 'OnMediumConfigChanged' => 96, 'OnAudioAdapterChanged' => 97, 'OnProgressPercentageChanged' => 98, 'OnProgressTaskCompleted' => 99, 'OnCursorPositionChanged' => 100, 'OnGuestAdditionsStatusChanged' => 101, 'OnGuestMonitorInfoChanged' => 102, 'OnGuestFileSizeChanged' => 103, 'OnClipboardFileTransferModeChanged' => 104, 'OnCloudProviderListChanged' => 105, 'OnCloudProviderRegistered' => 106, 'OnCloudProviderUninstall' => 107, 'OnCloudProfileRegistered' => 108, 'OnCloudProfileChanged' => 109, 'OnProgressCreated' => 110, 'OnLanguageChanged' => 111, 'OnUpdateAgentAvailable' => 112, 'OnUpdateAgentError' => 113, 'OnUpdateAgentSettingsChanged' => 114, 'OnUpdateAgentStateChanged' => 115, 'OnHostAudioDeviceChanged' => 116, 'OnGuestDebugControlChanged' => 117, 'OnMachineGroupsChanged' => 118, 'End' => 119);
+    public $NameMap = array(0 => 'Invalid', 1 => 'Any', 2 => 'Vetoable', 3 => 'MachineEvent', 4 => 'SnapshotEvent', 5 => 'InputEvent', 31 => 'LastWildcard', 32 => 'OnMachineStateChanged', 33 => 'OnMachineDataChanged', 34 => 'OnExtraDataChanged', 35 => 'OnExtraDataCanChange', 36 => 'OnMediumRegistered', 37 => 'OnMachineRegistered', 38 => 'OnSessionStateChanged', 39 => 'OnSnapshotTaken', 40 => 'OnSnapshotDeleted', 41 => 'OnSnapshotChanged', 42 => 'OnGuestPropertyChanged', 43 => 'OnMousePointerShapeChanged', 44 => 'OnMouseCapabilityChanged', 45 => 'OnKeyboardLedsChanged', 46 => 'OnStateChanged', 47 => 'OnAdditionsStateChanged', 48 => 'OnNetworkAdapterChanged', 49 => 'OnSerialPortChanged', 50 => 'OnParallelPortChanged', 51 => 'OnStorageControllerChanged', 52 => 'OnMediumChanged', 53 => 'OnVRDEServerChanged', 54 => 'OnUSBControllerChanged', 55 => 'OnUSBDeviceStateChanged', 56 => 'OnSharedFolderChanged', 57 => 'OnRuntimeError', 58 => 'OnCanShowWindow', 59 => 'OnShowWindow', 60 => 'OnCPUChanged', 61 => 'OnVRDEServerInfoChanged', 62 => 'OnEventSourceChanged', 63 => 'OnCPUExecutionCapChanged', 64 => 'OnGuestKeyboard', 65 => 'OnGuestMouse', 66 => 'OnNATRedirect', 67 => 'OnHostPCIDevicePlug', 68 => 'OnVBoxSVCAvailabilityChanged', 69 => 'OnBandwidthGroupChanged', 70 => 'OnGuestMonitorChanged', 71 => 'OnStorageDeviceChanged', 72 => 'OnClipboardModeChanged', 73 => 'OnDnDModeChanged', 74 => 'OnNATNetworkChanged', 75 => 'OnNATNetworkStartStop', 76 => 'OnNATNetworkAlter', 77 => 'OnNATNetworkCreationDeletion', 78 => 'OnNATNetworkSetting', 79 => 'OnNATNetworkPortForward', 80 => 'OnGuestSessionStateChanged', 81 => 'OnGuestSessionRegistered', 82 => 'OnGuestProcessRegistered', 83 => 'OnGuestProcessStateChanged', 84 => 'OnGuestProcessInputNotify', 85 => 'OnGuestProcessOutput', 86 => 'OnGuestFileRegistered', 87 => 'OnGuestFileStateChanged', 88 => 'OnGuestFileOffsetChanged', 89 => 'OnGuestFileRead', 90 => 'OnGuestFileWrite', 91 => 'OnRecordingStateChanged', 92 => 'OnGuestUserStateChanged', 93 => 'OnGuestMultiTouch', 94 => 'OnHostNameResolutionConfigurationChange', 95 => 'OnSnapshotRestored', 96 => 'OnMediumConfigChanged', 97 => 'OnAudioAdapterChanged', 98 => 'OnProgressPercentageChanged', 99 => 'OnProgressTaskCompleted', 100 => 'OnCursorPositionChanged', 101 => 'OnGuestAdditionsStatusChanged', 102 => 'OnGuestMonitorInfoChanged', 103 => 'OnGuestFileSizeChanged', 104 => 'OnClipboardFileTransferModeChanged', 105 => 'OnCloudProviderListChanged', 106 => 'OnCloudProviderRegistered', 107 => 'OnCloudProviderUninstall', 108 => 'OnCloudProfileRegistered', 109 => 'OnCloudProfileChanged', 110 => 'OnProgressCreated', 111 => 'OnLanguageChanged', 112 => 'OnUpdateAgentAvailable', 113 => 'OnUpdateAgentError', 114 => 'OnUpdateAgentSettingsChanged', 115 => 'OnUpdateAgentStateChanged', 116 => 'OnHostAudioDeviceChanged', 117 => 'OnGuestDebugControlChanged', 118 => 'OnMachineGroupsChanged', 119 => 'OnGuestDirectoryRegistered', 120 => 'OnGuestDirectoryStateChanged', 121 => 'OnGuestDirectoryRead', 122 => 'OnClipboardError', 123 => 'OnExtPackInstalled', 124 => 'OnExtPackUninstalled', 125 => 'OnRecordingScreenStateChanged', 126 => 'End');
+    public $ValueMap = array('Invalid' => 0, 'Any' => 1, 'Vetoable' => 2, 'MachineEvent' => 3, 'SnapshotEvent' => 4, 'InputEvent' => 5, 'LastWildcard' => 31, 'OnMachineStateChanged' => 32, 'OnMachineDataChanged' => 33, 'OnExtraDataChanged' => 34, 'OnExtraDataCanChange' => 35, 'OnMediumRegistered' => 36, 'OnMachineRegistered' => 37, 'OnSessionStateChanged' => 38, 'OnSnapshotTaken' => 39, 'OnSnapshotDeleted' => 40, 'OnSnapshotChanged' => 41, 'OnGuestPropertyChanged' => 42, 'OnMousePointerShapeChanged' => 43, 'OnMouseCapabilityChanged' => 44, 'OnKeyboardLedsChanged' => 45, 'OnStateChanged' => 46, 'OnAdditionsStateChanged' => 47, 'OnNetworkAdapterChanged' => 48, 'OnSerialPortChanged' => 49, 'OnParallelPortChanged' => 50, 'OnStorageControllerChanged' => 51, 'OnMediumChanged' => 52, 'OnVRDEServerChanged' => 53, 'OnUSBControllerChanged' => 54, 'OnUSBDeviceStateChanged' => 55, 'OnSharedFolderChanged' => 56, 'OnRuntimeError' => 57, 'OnCanShowWindow' => 58, 'OnShowWindow' => 59, 'OnCPUChanged' => 60, 'OnVRDEServerInfoChanged' => 61, 'OnEventSourceChanged' => 62, 'OnCPUExecutionCapChanged' => 63, 'OnGuestKeyboard' => 64, 'OnGuestMouse' => 65, 'OnNATRedirect' => 66, 'OnHostPCIDevicePlug' => 67, 'OnVBoxSVCAvailabilityChanged' => 68, 'OnBandwidthGroupChanged' => 69, 'OnGuestMonitorChanged' => 70, 'OnStorageDeviceChanged' => 71, 'OnClipboardModeChanged' => 72, 'OnDnDModeChanged' => 73, 'OnNATNetworkChanged' => 74, 'OnNATNetworkStartStop' => 75, 'OnNATNetworkAlter' => 76, 'OnNATNetworkCreationDeletion' => 77, 'OnNATNetworkSetting' => 78, 'OnNATNetworkPortForward' => 79, 'OnGuestSessionStateChanged' => 80, 'OnGuestSessionRegistered' => 81, 'OnGuestProcessRegistered' => 82, 'OnGuestProcessStateChanged' => 83, 'OnGuestProcessInputNotify' => 84, 'OnGuestProcessOutput' => 85, 'OnGuestFileRegistered' => 86, 'OnGuestFileStateChanged' => 87, 'OnGuestFileOffsetChanged' => 88, 'OnGuestFileRead' => 89, 'OnGuestFileWrite' => 90, 'OnRecordingStateChanged' => 91, 'OnGuestUserStateChanged' => 92, 'OnGuestMultiTouch' => 93, 'OnHostNameResolutionConfigurationChange' => 94, 'OnSnapshotRestored' => 95, 'OnMediumConfigChanged' => 96, 'OnAudioAdapterChanged' => 97, 'OnProgressPercentageChanged' => 98, 'OnProgressTaskCompleted' => 99, 'OnCursorPositionChanged' => 100, 'OnGuestAdditionsStatusChanged' => 101, 'OnGuestMonitorInfoChanged' => 102, 'OnGuestFileSizeChanged' => 103, 'OnClipboardFileTransferModeChanged' => 104, 'OnCloudProviderListChanged' => 105, 'OnCloudProviderRegistered' => 106, 'OnCloudProviderUninstall' => 107, 'OnCloudProfileRegistered' => 108, 'OnCloudProfileChanged' => 109, 'OnProgressCreated' => 110, 'OnLanguageChanged' => 111, 'OnUpdateAgentAvailable' => 112, 'OnUpdateAgentError' => 113, 'OnUpdateAgentSettingsChanged' => 114, 'OnUpdateAgentStateChanged' => 115, 'OnHostAudioDeviceChanged' => 116, 'OnGuestDebugControlChanged' => 117, 'OnMachineGroupsChanged' => 118, 'OnGuestDirectoryRegistered' => 119, 'OnGuestDirectoryStateChanged' => 120, 'OnGuestDirectoryRead' => 121, 'OnClipboardError' => 122, 'OnExtPackInstalled' => 123, 'OnExtPackUninstalled' => 124, 'OnRecordingScreenStateChanged' => 125, 'End' => 126);
 }
 
 /**
@@ -23734,8 +24683,8 @@ class GuestMonitorChangedEventTypeCollection extends VBox_EnumCollection
  */
 class FormValueType extends VBox_Enum
 {
-    public $NameMap = array(0 => 'Boolean', 1 => 'String', 2 => 'Choice', 3 => 'RangedInteger');
-    public $ValueMap = array('Boolean' => 0, 'String' => 1, 'Choice' => 2, 'RangedInteger' => 3);
+    public $NameMap = array(0 => 'Boolean', 1 => 'String', 2 => 'Choice', 3 => 'RangedInteger', 4 => 'RangedInteger64');
+    public $ValueMap = array('Boolean' => 0, 'String' => 1, 'Choice' => 2, 'RangedInteger' => 3, 'RangedInteger64' => 4);
 }
 
 /**
@@ -23778,4 +24727,38 @@ class CloudImageState extends VBox_Enum
 class CloudImageStateCollection extends VBox_EnumCollection
 {
     protected $_interfaceName = "CloudImageState";
+}
+
+/**
+ * Generated VBoxWebService ENUM
+ */
+class MetricType extends VBox_Enum
+{
+    public $NameMap = array(0 => 'Invalid', 1 => 'CpuUtilization', 2 => 'MemoryUtilization', 3 => 'DiskBytesRead', 4 => 'DiskBytesWritten', 5 => 'NetworksBytesIn', 6 => 'NetworksBytesOut');
+    public $ValueMap = array('Invalid' => 0, 'CpuUtilization' => 1, 'MemoryUtilization' => 2, 'DiskBytesRead' => 3, 'DiskBytesWritten' => 4, 'NetworksBytesIn' => 5, 'NetworksBytesOut' => 6);
+}
+
+/**
+ * Generated VBoxWebService Enum Collection
+ */
+class MetricTypeCollection extends VBox_EnumCollection
+{
+    protected $_interfaceName = "MetricType";
+}
+
+/**
+ * Generated VBoxWebService ENUM
+ */
+class SymlinkPolicy extends VBox_Enum
+{
+    public $NameMap = array(0 => 'None', 1 => 'Forbidden', 2 => 'AllowedInShareSubtree', 3 => 'AllowedToRelativeTargets', 4 => 'AllowedToAnyTarget');
+    public $ValueMap = array('None' => 0, 'Forbidden' => 1, 'AllowedInShareSubtree' => 2, 'AllowedToRelativeTargets' => 3, 'AllowedToAnyTarget' => 4);
+}
+
+/**
+ * Generated VBoxWebService Enum Collection
+ */
+class SymlinkPolicyCollection extends VBox_EnumCollection
+{
+    protected $_interfaceName = "SymlinkPolicy";
 }
