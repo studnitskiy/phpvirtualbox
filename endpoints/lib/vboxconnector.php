@@ -4724,7 +4724,7 @@ class vboxconnector {
 			$machine->lockMachine($this->session->handle, ((string)$machine->sessionState == 'Unlocked' ? 'Write' : 'Shared'));
 
 			/* @var $progress IProgress */
-			list($progress, $snapshotId) = $this->session->machine->takeSnapshot($args['name'], $args['description'], false);
+			list($progress, $snapshotId) = $this->session->machine->takeSnapshot($args['name'], $args['description'], true);
 
 			// Does an exception exist?
 			try {
